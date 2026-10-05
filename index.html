@@ -1111,6 +1111,14 @@
         case 'CLOSE_KESSAN':
           closeKessanLocal();
           break;
+          
+          case 'SHOW_ALERT':
+            alert(payload.text);
+            break;
+
+          case 'SET_MESSAGE':
+            document.getElementById("message").innerText = payload.text;
+            break;
       }
     }
 
@@ -1656,6 +1664,11 @@
         alert(`👹 貧乏神「ヒマだから ${victim.name} から ${loss}万円 もらっておくのねん！」`);
       }
 
+      if (myPlayerId === 'p1') {
+        sendData('SHOW_ALERT', { text: alertText });
+      }
+      alert(alertText);
+
       renderBoard();
       syncGameState();
     }
@@ -1762,9 +1775,10 @@
         
         bonbyOwner = null;
 
-        alert(`🎊 祝！ ${curPlayer.name} が ${tile.name} に一番乗りで到着しました！\n💰 到着賞金として 【${prizeMoney}万円】 を獲得！\n👹 貧乏神は姿を消しました！`);
+        const goalMsg = `🎊 祝！ ${curPlayer.name} が ${tile.name} に一番乗りで到着しました！\n💰 到着賞金として 【${prizeMoney}万円】 を獲得！\n👹 貧乏神は姿を消しました！`;
         
         if (myPlayerId === 'p1') {
+          sendData('SHOW_ALERT', { text: goalMsg });
           setNextDestination();
         }
         renderBoard();
