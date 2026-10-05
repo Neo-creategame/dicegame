@@ -1955,7 +1955,7 @@
       document.getElementById("date-display").innerText = `${currentYear}年目 ${currentMonth}月`;
 
       // ゲーム終了判定
-      if ((gameMode === "3years" && currentYear > 3) || (gameMode === "5years" && currentYear > 5)) {
+      if ((gameMode === "3years" && currentYear > 3 && curentMonth > 3) || (gameMode === "5years" && currentYear > 5 && currentMonth > 3)) {
         finishGame();
         return;
       }
