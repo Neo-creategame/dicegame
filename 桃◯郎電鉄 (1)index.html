@@ -1,0 +1,2053 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>桃鉄Web - CPU対戦＆最大4人対応版</title>
+  <!-- PeerJS の読み込み -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background-color: #eef2f5;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ロビー（オンライン/CPU設定）モーダル */
+    #lobby-modal {
+      display: flex;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .lobby-box {
+      background: white;
+      padding: 25px;
+      border-radius: 16px;
+      max-width: 480px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .lobby-box h2 { margin-top: 0; color: #333; }
+    .lobby-btn {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      font-size: 15px;
+      font-weight: bold;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .btn-create { background: #2196F3; color: white; }
+    .btn-join { background: #4CAF50; color: white; }
+    .btn-single { background: #ff9800; color: white; }
+    
+    .player-setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      margin-bottom: 6px;
+    }
+    .lobby-input {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      text-align: center;
+      margin: 8px 0;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+    }
+
+    .app-container {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      padding: 10px;
+      gap: 10px;
+    }
+
+    .left-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100%;
+      position: relative;
+    }
+
+    .right-area {
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      height: 100%;
+      z-index: 10;
+    }
+
+    .header-group {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      padding: 0 5px;
+      gap: 10px;
+    }
+
+    h1 { color: #333; margin: 0; font-size: 18px; white-space: nowrap; }
+
+    .map-btn-main {
+      background: #ff9800 !important;
+      color: white !important;
+      font-size: 13px !important;
+      padding: 6px 14px !important;
+      border-radius: 20px !important;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.2) !important;
+      cursor: pointer;
+      border: 2px solid #fff;
+    }
+
+    .overall-header-bar {
+      display: none;
+      position: absolute;
+      top: 45px;
+      left: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      padding: 8px 15px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 30;
+      justify-content: space-between;
+      align-items: center;
+      border: 2px solid #ffb300;
+      animation: popIn 0.2s ease;
+      font-size: 12px;
+    }
+
+    .turn-indicator {
+      font-size: 1.1em;
+      font-weight: bold;
+      padding: 6px 15px;
+      border-radius: 20px;
+      color: white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      transition: all 0.3s ease;
+      width: 100%;
+      max-width: 350px;
+      text-align: center;
+    }
+
+    .status-container { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 280px; }
+    .status-card {
+      background: white;
+      padding: 6px 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+      border: 2px solid #eee;
+      transition: all 0.3s;
+      opacity: 0.6;
+    }
+    .status-card.active { border-color: #2196F3; background: #e3f2fd; opacity: 1; transform: scale(1.02); }
+    .status-item { display: flex; justify-content: space-between; align-items: center; }
+    .status-item .label { font-size: 11px; color: #666; font-weight: bold; }
+    .status-item .value { font-size: 0.95em; font-weight: bold; }
+
+    .destination-banner {
+      background: #ffecb3;
+      border: 2px solid #ffb300;
+      color: #896000;
+      padding: 6px 12px;
+      border-radius: 15px;
+      font-weight: bold;
+      font-size: 0.9em;
+      width: 100%;
+      text-align: center;
+    }
+
+    .message-box {
+      font-weight: bold;
+      color: #444;
+      font-size: 13px;
+      min-height: 18px;
+      text-align: center;
+    }
+
+    .map-outer {
+      flex: 1;
+      width: 100%;
+      background: #b3e5fc;
+      border-radius: 12px;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.15);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .map-container {
+      display: grid;
+      grid-template-columns: repeat(40, 26px);
+      grid-template-rows: repeat(40, 26px);
+      gap: 4px;
+      padding: 20px;
+      position: absolute;
+      transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+      transform-origin: top left;
+    }
+
+    .tile {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      position: relative;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      transition: transform 0.1s;
+      font-size: 4.5px;
+      line-height: 1.1;
+      text-align: center;
+    }
+    .tile:hover { transform: scale(1.08); z-index: 5; }
+
+    .tile.blue { background: linear-gradient(135deg, #2196F3, #1e88e5); }
+    .tile.red { background: linear-gradient(135deg, #FF5252, #e53935); }
+    .tile.yellow { background: linear-gradient(135deg, #FFC107, #ffa000); }
+    .tile.normal { background: linear-gradient(135deg, #ffffff, #e0e0e0); color: #333; }
+    .tile.station { background: linear-gradient(135deg, #4CAF50, #43a047); }
+    .tile.bonby { background: linear-gradient(135deg, #8e24aa, #4a148c); }
+    .tile.event { background: linear-gradient(135deg, #00bcd4, #0097a7); }
+
+    .dest-badge {
+      position: absolute;
+      top: -6px;
+      background: #ff9800;
+      color: white;
+      font-size: 8px;
+      padding: 1px 3px;
+      border-radius: 6px;
+      z-index: 2;
+    }
+
+    .player-icon {
+      position: absolute;
+      font-size: 14px;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+      z-index: 3;
+    }
+    .p-0 { top: -8px; left: -2px; }
+    .p-1 { top: -8px; right: -2px; }
+    .p-2 { bottom: -6px; left: -2px; }
+    .p-3 { bottom: -6px; right: -2px; }
+
+    .bonby-icon {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 16px;
+      animation: bounce 0.6s infinite alternate;
+      z-index: 4;
+    }
+    @keyframes bounce {
+      from { transform: translate(-50%, 0); }
+      to { transform: translate(-50%, -4px); }
+    }
+
+    .controls-container { display: flex; gap: 10px; margin-top: 6px; }
+
+    button {
+      font-size: 14px;
+      padding: 8px 18px;
+      border: none;
+      border-radius: 18px;
+      cursor: pointer;
+      font-weight: bold;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.12);
+    }
+    button#dice-btn { background: #ff9800; color: white; }
+    button#card-btn { background: #9c27b0; color: white; }
+    button#next-btn { background: #4caf50; color: white; display: none; }
+    button:disabled { background: #ccc !important; cursor: not-allowed; box-shadow: none; }
+
+    /* マス情報パネル（標準表示） */
+    .info-panel {
+      background: white;
+      padding: 12px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 120px;
+    }
+    .info-panel h3 { margin: 0 0 6px 0; font-size: 14px; color: #333; border-bottom: 2px solid #eee; padding-bottom: 4px; }
+
+    .property-list { list-style: none; padding: 0; margin: 0; }
+    .property-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px dashed #eee;
+    }
+
+    .buy-btn {
+      font-size: 11px;
+      padding: 4px 8px;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      background: #2196F3;
+    }
+    .buy-btn:disabled { background: #ccc !important; cursor: not-allowed; }
+
+    .owned-tag { font-weight: bold; font-size: 11px; }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 380px;
+      width: 85%;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      animation: popIn 0.3s ease;
+    }
+
+    /* --- 分岐モーダル専用スタイル（最小化＆ドラッグ対応） --- */
+    #branch-modal-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      transition: height 0.2s ease, padding 0.2s ease;
+    }
+
+    .branch-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: move;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+    }
+
+    #branch-minimize-btn {
+      background: #eee;
+      border: 1px solid #ccc;
+      color: #333;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      box-shadow: none;
+    }
+    #branch-minimize-btn:hover { background: #ddd; }
+
+    #branch-modal-content.minimized {
+      height: 48px !important;
+      overflow: hidden;
+      padding-bottom: 0;
+    }
+    #branch-modal-content.minimized #branch-modal-body { display: none; }
+    #branch-modal-content.minimized .branch-header { border-bottom: none; margin-bottom: 0; }
+
+    .branch-btn-group { display: flex; flex-direction: column; gap: 8px; }
+    .branch-btn { background: #2196F3; color: white; padding: 10px; border-radius: 8px; font-size: 14px; }
+    .kessan-table { width: 100%; margin: 10px 0; border-collapse: collapse; }
+    .kessan-table th, .kessan-table td { padding: 6px; border-bottom: 1px solid #ddd; font-size: 12px; text-align: center; }
+    .card-use-list { list-style: none; padding: 0; margin: 10px 0; }
+    .card-use-item { display: flex; justify-content: space-between; align-items: center; padding: 6px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 6px; }
+
+    @keyframes popIn {
+      from { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+      to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- オンライン/CPU設定用ロビー画面 -->
+  <div id="lobby-modal">
+    <div class="lobby-box">
+      <h2>🎲 桃鉄Web 設定</h2>
+      
+      <div style="text-align: left; margin-bottom: 15px;">
+        <!-- ゲームモード選択 -->
+        <div style="margin-bottom: 12px; background: #e8f5e9; padding: 8px 12px; border-radius: 8px;">
+          <label style="font-weight: bold; font-size: 13px; color: #2e7d32;">🏆 ゲームモード選択:</label>
+          <select id="game-mode-select" style="margin-left: 8px; padding: 4px; font-weight: bold;">
+            <option value="3years" selected>3年決戦 (初期資金5000万円)</option>
+            <option value="5years">5年プレイ (初期資金1500万円)</option>
+            <option value="infinite">無限モード (終了なし)</option>
+          </select>
+        </div>
+
+        <label style="font-weight: bold; font-size: 14px;">🎮 プレイヤー構成設定 (最大4人):</label>
+        <div id="player-config-list" style="margin-top: 8px;">
+          <div class="player-setting-row">
+            <span>🚃 P1: 桃太郎 (あなた)</span>
+            <span style="font-weight:bold; color:#2196F3;">人間 (ホスト)</span>
+          </div>
+          <div class="player-setting-row">
+            <span>🚅 P2: 金太郎</span>
+            <select id="p2-type" onchange="updatePlayerConfigs()">
+              <option value="human">人間 (オンライン)</option>
+              <option value="cpu" selected>CPU (AI)</option>
+              <option value="none">なし (2人プレイ時)</option>
+            </select>
+          </div>
+          <div class="player-setting-row">
+            <span>🐢 P3: 浦島</span>
+            <select id="p3-type" onchange="updatePlayerConfigs()">
+              <option value="human">人間 (オンライン)</option>
+              <option value="cpu" selected>CPU (AI)</option>
+              <option value="none">なし</option>
+            </select>
+          </div>
+          <div class="player-setting-row">
+            <span>👸 P4: 夜叉姫</span>
+            <select id="p4-type" onchange="updatePlayerConfigs()">
+              <option value="human">人間 (オンライン)</option>
+              <option value="cpu">CPU (AI)</option>
+              <option value="none" selected>なし</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- CPU強さ設定 -->
+        <div style="margin-top: 12px; text-align: left; background: #fff3e0; padding: 8px 12px; border-radius: 8px;">
+          <label style="font-weight: bold; font-size: 13px; color: #e65100;">🤖 CPUの強さ設定:</label>
+          <select id="cpu-level-select" style="margin-left: 8px; padding: 4px; font-weight: bold;">
+            <option value="easy">よわい (半分迷子)</option>
+            <option value="normal" selected>ふつう (たまに遠回り)</option>
+            <option value="hard">つよい (ガチ最短ルート)</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="lobby-btn btn-single" onclick="startSingleOrHostGame()">▶️ この設定でゲーム開始 (1人〜ホスト)</button>
+      
+      <div style="margin: 15px 0; border-top: 1px solid #eee; padding-top: 15px;">
+        <p style="font-size: 12px; color: #666; margin: 4px 0;">オンラインの部屋に参加する場合はこちら</p>
+        <input type="text" id="join-room-id" class="lobby-input" placeholder="部屋IDを入力">
+        <button class="lobby-btn btn-join" onclick="joinRoom()">🚪 部屋に参加する (ゲスト)</button>
+      </div>
+
+      <div id="lobby-status" style="margin-top: 10px; font-weight: bold; color: #d81b60; font-size: 13px;"></div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <div class="left-area">
+      <div class="header-group">
+        <h1>🎲 桃鉄Web 🎲</h1>
+        <button id="map-toggle-btn" class="map-btn-main" onclick="toggleMapView()">🗺️️ 全体マップを開く</button>
+      </div>
+
+      <div class="overall-header-bar" id="overall-header">
+        <div id="bar-players-info"></div>
+        <div class="dest-info" style="color: #d81b60; font-weight: bold; background: #ffecb3; padding: 4px 12px; border-radius: 15px;">🎯 <span id="bar-dest-name">---</span></div>
+      </div>
+
+      <div id="turn-banner" class="turn-indicator" style="background: linear-gradient(135deg, #1e88e5, #1565c0);">
+        👉 🚃 桃太郎社長 のターン
+      </div>
+
+      <div class="message-box" id="message">設定を完了してゲームを開始してください</div>
+
+      <div class="map-outer" id="map-outer">
+        <div class="map-container" id="map"></div>
+      </div>
+
+      <div class="controls-container">
+        <button id="dice-btn" onclick="rollDice()">🎲 サイコロを振る！</button>
+        <button id="card-btn" onclick="openCardModal()" disabled>🎴 カードをつかう</button>
+        <button id="next-btn" onclick="nextTurn()">▶️ 次のターンへ</button>
+      </div>
+    </div>
+
+    <div class="right-area">
+      <div class="destination-banner">
+        🎯 目的地: <span id="destination-name" style="color: #d81b60; font-size: 1.1em;">---</span>
+      </div>
+
+      <div class="status-card" style="opacity: 1; border-color: #ff9800; text-align: center;">
+        <span style="font-size: 11px; color: #666;">日時: </span>
+        <span id="date-display" style="font-weight: bold; color: #1565c0;">1年目 4月</span>
+      </div>
+
+      <div class="status-container" id="status-container"></div>
+
+      <!-- マス情報パネル -->
+      <div class="info-panel" id="info-panel">
+        <h3 id="panel-title">マス情報</h3>
+        <div id="panel-content">マスをクリックすると詳細が表示されます。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分岐選択モーダル（ドラッグ＆最小化対応） -->
+  <div class="modal" id="branch-modal">
+    <div class="modal-content" id="branch-modal-content">
+      <div class="branch-header" id="branch-header">
+        <h3 style="color: #333; margin: 0; font-size: 15px;">🔀 どっちへ進む？</h3>
+        <button id="branch-minimize-btn" onclick="toggleMinimizeBranch(event)">ー</button>
+      </div>
+      <div id="branch-modal-body" class="branch-btn-group"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="card-modal">
+    <div class="modal-content">
+      <h3 style="color: #9c27b0; margin-top: 0;">🎴 カードを選択</h3>
+      <div id="card-modal-body"></div>
+      <button style="margin-top: 10px; background: #777; color: white;" onclick="closeCardModal()">閉じる</button>
+    </div>
+  </div>
+
+  <div class="modal" id="kessan-modal">
+    <div class="modal-content">
+      <h2 style="color: #e91e63; margin-top: 0;" id="kessan-title">🎊 決算発表 🎊</h2>
+      <p id="kessan-year-text">1年目の決算です！</p>
+      
+      <table class="kessan-table" id="kessan-table"></table>
+
+      <button style="margin-top: 10px; background:#ff9800; color:white;" id="kessan-close-btn" onclick="closeKessan()">次へ進む</button>
+    </div>
+  </div>
+
+  <script>
+    // --- プレイヤーマスタ設定 (最大4人対応) ---
+    const ALL_PLAYER_TEMPLATES = [
+      { id: "p1", name: "桃太郎社長", icon: "🚃", color: "#1e88e5" },
+      { id: "p2", name: "金太郎社長", icon: "🚅", color: "#e91e63" },
+      { id: "p3", name: "浦島社長",   icon: "🐢", color: "#4caf50" },
+      { id: "p4", name: "夜叉姫社長", icon: "👸", color: "#9c27b0" }
+    ];
+
+    let players = [];
+    let myPlayerId = "p1";
+    let peer = null;
+    let connections = [];
+    let isCpuProcessing = false; // CPU動作ロックフラグ
+    let cpuLevel = "normal"; // CPUの難易度設定
+    let gameMode = "3years"; // ゲームモード (3years, 5years, infinite)
+    let isGameOver = false;
+
+    // 完全復元版 日本全域マップデータ
+    const board = [
+      // 1. 北海道エリア
+      { id: 0, name: "稚内", type: "station", x: 27, y: 2, next: [1, 7], properties: [{ id: 0, name: "カニ料理店", price: 3000, rate: 40, owner: null }] },
+      { id: 1, name: "網走", type: "station", x: 30, y: 5, next: [2, 4], properties: [{ id: 0, name: "網走刑務所", price: 3000, rate: 50, owner: null }] },
+      { id: 2, name: "旭川", type: "station", x: 27, y: 5, next: [3, 1], properties: [{ id: 0, name: "動物園", price: 2000, rate: 30, owner: null }] },
+      { id: 3, name: "札幌", type: "station", x: 26, y: 7, next: [4, 5, 23], properties: [{ id: 0, name: "札幌ラーメン", price: 1500, rate: 50, owner: null }] },
+      { id: 4, name: "釧路", type: "station", x: 30, y: 8, next: [1, 3], properties: [{ id: 0, name: "釧路湿原観光", price: 1000, rate: 50, owner: null }] },
+      { id: 5, name: "函館", type: "station", x: 25, y: 9, next: [3, 101], properties: [{ id: 0, name: "ラッキーピエロ", price: 1500, rate: 50, owner: null }] },
+      { id: 6, name: "千歳", type: "station", x: 28, y: 6, next: [0, 3], properties: [{ id: 0, name: "千歳空港", price: 1500, rate: 50, owner: null }] },
+      { id: 7, name: "+マス", type: "blue", x: 28, y: 2, next: [8, 0] },
+      { id: 8, name: "", type: "normal", x: 27, y: 3, next: [9, 7] },
+      { id: 9, name: "-マス", type: "red", x: 28, y: 3, next: [12, 8] },
+      { id: 10, name: "", type: "normal", x: 26, y: 4, next: [11, 3] },
+      { id: 11, name: "+マス", type: "blue", x: 27, y: 4, next: [12, 10] },
+      { id: 12, name: "カードマス", type: "yellow", x: 28, y: 4, next: [13, 9] },
+      { id: 13, name: "", type: "normal", x: 29, y: 4, next: [16, 12] },
+      { id: 14, name: "+マス", type: "blue", x: 26, y: 5, next: [2, 10] },
+      { id: 15, name: "", type: "normal", x: 28, y: 5, next: [6, 12] },
+      { id: 16, name: "-マス", type: "red", x: 29, y: 5, next: [20, 13] },
+      { id: 17, name: "", type: "normal", x: 26, y: 6, next: [3, 14] },
+      { id: 18, name: "-マス", type: "red", x: 27, y: 6, next: [3, 6] },
+      { id: 20, name: "", type: "normal", x: 29, y: 6, next: [21, 16] },
+      { id: 21, name: "+マス", type: "blue", x: 30, y: 6, next: [22, 20] },
+      { id: 22, name: "", type: "normal", x: 31, y: 6, next: [28, 21] },
+      { id: 23, name: "カードマス", type: "yellow", x: 25, y: 7, next: [29, 3] },
+      { id: 24, name: "", type: "normal", x: 27, y: 7, next: [3, 30] },
+      { id: 25, name: "-マス", type: "red", x: 28, y: 7, next: [31, 18] },
+      { id: 26, name: "+マス", type: "blue", x: 29, y: 7, next: [32, 20] },
+      { id: 27, name: "", type: "normal", x: 30, y: 7, next: [4, 21] },
+      { id: 28, name: "-マス", type: "red", x: 31, y: 7, next: [4, 22] },
+      { id: 29, name: "+マス", type: "blue", x: 25, y: 8, next: [5, 23] },
+      { id: 30, name: "+マス", type: "blue", x: 27, y: 8, next: [5, 24] },
+      { id: 31, name: "", type: "normal", x: 28, y: 8, next: [5, 25] },
+      { id: 32, name: "カードマス", type: "yellow", x: 29, y: 8, next: [4, 26] },
+
+      // 2. 東北エリア
+      { id: 101, name: "大間", type: "station", x: 27, y: 10, next: [102, 5], properties: [{ id: 0, name: "マグロ漁船", price: 1200, rate: 40, owner: null }] },
+      { id: 102, name: "青森", type: "station", x: 26, y: 12, next: [103, 104, 105, 101], properties: [{ id: 0, name: "リンゴ果樹園", price: 1500, rate: 50, owner: null }] },
+      { id: 103, name: "弘前", type: "station", x: 25, y: 12, next: [106, 102], properties: [{ id: 0, name: "リンゴ果樹園", price: 800, rate: 50, owner: null }] },
+      { id: 104, name: "酸ヶ湯", type: "station", x: 27, y: 12, next: [110, 102], properties: [{ id: 0, name: "酸ヶ湯温泉", price: 1500, rate: 50, owner: null }] },
+      { id: 105, name: "八戸", type: "station", x: 28, y: 12, next: [111, 102], properties: [{ id: 0, name: "八戸港", price: 1000, rate: 45, owner: null }] },
+      { id: 126, name: "-マス", type: "red", x: 25, y: 11, next: [103, 102] },
+      { id: 127, name: "+マス", type: "blue", x: 27, y: 11, next: [104, 101] },
+      { id: 128, name: "", type: "normal", x: 28, y: 11, next: [105, 101] },
+        
+      { id: 106, name: "大館", type: "station", x: 25, y: 13, next: [107, 103], properties: [{ id: 0, name: "比内地鶏店", price: 1500, rate: 50, owner: null }] },
+      { id: 107, name: "秋田", type: "station", x: 24, y: 14, next: [108, 106], properties: [{ id: 0, name: "きりたんぽ店", price: 1500, rate: 35, owner: null }] },
+      { id: 108, name: "大仙", type: "station", x: 25, y: 14, next: [109, 107], properties: [{ id: 0, name: "クニマス", price: 1500, rate: 50, owner: null }] },
+      { id: 109, name: "横手", type: "station", x: 25, y: 15, next: [114, 108], properties: [{ id: 0, name: "横手やきそば店", price: 1500, rate: 40, owner: null }] },
+      { id: 129, name: "", type: "normal", x: 26, y: 13, next: [110, 106] },
+      { id: 131, name: "+マス", type: "blue", x: 26, y: 14, next: [112, 108] },
+      { id: 132, name: "", type: "normal", x: 26, y: 15, next: [113, 109] },
+    
+      { id: 110, name: "二戸", type: "station", x: 28, y: 13, next: [112, 104], properties: [{ id: 0, name: "金田一温泉", price: 1500, rate: 50, owner: null }] },
+      { id: 111, name: "久慈", type: "station", x: 28, y: 14, next: [112, 105], properties: [{ id: 0, name: "平庭スキー場", price: 1000, rate: 40, owner: null }] },
+      { id: 112, name: "盛岡", type: "station", x: 27, y: 14, next: [113, 110, 111], properties: [{ id: 0, name: "盛岡冷麺", price: 1500, rate: 50, owner: null }] },
+      { id: 113, name: "平泉", type: "station", x: 27, y: 15, next: [118, 119, 112], properties: [{ id: 0, name: "中尊寺", price: 3000, rate: 40, owner: null }] },
+      { id: 130, name: "+マス", type: "blue", x: 27, y: 13, next: [112, 104] },
+      { id: 138, name: "-マス", type: "red", x: 28, y: 15, next: [118, 113] },
+
+      { id: 114, name: "新庄", type: "station", x: 25, y: 16, next: [115, 116, 109], properties: [{ id: 0, name: "新庄まつり山車", price: 3000, rate: 40, owner: null }] },
+      { id: 115, name: "酒田", type: "station", x: 24, y: 16, next: [116, 114], properties: [{ id: 0, name: "酒田港", price: 1500, rate: 50, owner: null }] },
+      { id: 116, name: "山形", type: "station", x: 26, y: 17, next: [117, 114], properties: [{ id: 0, name: "蔵王温泉", price: 1500, rate: 50, owner: null }] },
+      { id: 117, name: "米沢", type: "station", x: 25, y: 18, next: [122, 123, 116], properties: [{ id: 0, name: "米沢牛", price: 1500, rate: 50, owner: null }] },
+      { id: 133, name: "-マス", type: "red", x: 26, y: 16, next: [116, 118] },
+      { id: 134, name: "カードマス", type: "yellow", x: 25, y: 17, next: [117, 114] },
+      { id: 135, name: "", type: "normal", x: 26, y: 18, next: [120, 117] },
+        
+      { id: 118, name: "登米", type: "station", x: 28, y: 16, next: [120, 113], properties: [{ id: 0, name: "石ノ森章太郎記念館", price: 1500, rate: 50, owner: null }] },
+      { id: 119, name: "大崎", type: "station", x: 27, y: 16, next: [120, 113], properties: [{ id: 0, name: "鳴子温泉", price: 1500, rate: 50, owner: null }] },
+      { id: 120, name: "仙台", type: "station", x: 27, y: 17, next: [121, 118, 119], properties: [{ id: 0, name: "うみの杜水族館", price: 1500, rate: 50, owner: null }] },
+      { id: 121, name: "白石", type: "station", x: 27, y: 18, next: [125, 120], properties: [{ id: 0, name: "白石城", price: 1500, rate: 50, owner: null }] },
+        
+      { id: 122, name: "福島", type: "station", x: 26, y: 19, next: [125, 117], properties: [{ id: 0, name: "桃果樹園", price: 1500, rate: 50, owner: null }] },
+      { id: 123, name: "喜多方", type: "station", x: 24, y: 19, next: [124, 117], properties: [{ id: 0, name: "喜多方ラーメン", price: 1500, rate: 50, owner: null }] },
+      { id: 124, name: "会津若松", type: "station", x: 25, y: 19, next: [125, 123], properties: [{ id: 0, name: "会津若松城", price: 1500, rate: 50, owner: null }] },
+      { id: 125, name: "郡山", type: "station", x: 27, y: 19, next: [201, 205, 121, 122, 124], properties: [{ id: 0, name: "郡山駅前ビル", price: 1500, rate: 50, owner: null }] },
+      { id: 136, name: "", type: "normal", x: 25, y: 20, next: [206, 124] },
+      { id: 137, name: "カードマス", type: "yellow", x: 26, y: 20, next: [207, 122] },
+      { id: 139, name: "", type: "normal", x: 27, y: 20, next: [201, 125] },
+
+      // 3. 関東エリア
+      { id: 201, name: "大子", type: "station", x: 27, y: 21, next: [202, 125], properties: [{ id: 0, name: "こんにゃく関所", price: 600, rate: 50, owner: null }] },
+      { id: 202, name: "水戸", type: "station", x: 28, y: 22, next: [203, 201], properties: [{ id: 0, name: "納豆工場", price: 1500, rate: 50, owner: null }] },
+      { id: 203, name: "鉾田", type: "station", x: 28, y: 22, next: [204, 210, 202], properties: [{ id: 0, name: "メロンの森", price: 800, rate: 55, owner: null }] },
+      { id: 204, name: "牛久", type: "station", x: 27, y: 22, next: [211, 217, 203], properties: [{ id: 0, name: "牛久シャトー", price: 500, rate: 50, owner: null }] },
+      { id: 223, name: "-マス", type: "red", x: 28, y: 20, next: [202, 125] },
+      { id: 224, name: "+マス", type: "blue", x: 29, y: 22, next: [210, 203] },
+    
+      { id: 205, name: "那須", type: "station", x: 24, y: 20, next: [206, 125], properties: [{ id: 0, name: "那須ハイランドパーク", price: 1500, rate: 50, owner: null }] },
+      { id: 206, name: "日光", type: "station", x: 25, y: 21, next: [207, 205], properties: [{ id: 0, name: "日光東照宮", price: 1200, rate: 35, owner: null }] },
+      { id: 207, name: "宇都宮", type: "station", x: 26, y: 21, next: [216, 217, 206], properties: [{ id: 0, name: "宇都宮餃子", price: 1500, rate: 50, owner: null }] },
+      { id: 208, name: "前橋", type: "station", x: 24, y: 21, next: [215, 209], properties: [{ id: 0, name: "焼きまんじゅう屋", price: 800, rate: 45, owner: null }] },
+      { id: 209, name: "草津", type: "station", x: 23, y: 21, next: [208, 313], properties: [{ id: 0, name: "草津温泉", price: 1000, rate: 50, owner: null }] },
+      { id: 210, name: "銚子", type: "station", x: 29, y: 23, next: [211, 203], properties: [{ id: 0, name: "銚子港", price: 5000, rate: 50, owner: null }] },
+      { id: 211, name: "成田", type: "station", x: 28, y: 23, next: [213, 210], properties: [{ id: 0, name: "成田国際空港", price: 3000, rate: 50, owner: null }] },
+      { id: 212, name: "浦安", type: "station", x: 27, y: 24, next: [218, 213], properties: [{ id: 0, name: "東京ディズニーランド", price: 10000, rate: 75, owner: null }] },
+      { id: 213, name: "船橋", type: "station", x: 28, y: 24, next: [212, 214, 211], properties: [{ id: 0, name: "ホキ美術館", price: 1500, rate: 50, owner: null }] },
+      { id: 214, name: "富津", type: "station", x: 28, y: 25, next: [220, 213], properties: [{ id: 0, name: "マザー牧場", price: 1500, rate: 50, owner: null }] },
+      { id: 215, name: "川越", type: "station", x: 24, y: 22, next: [218, 208], properties: [{ id: 0, name: "駄菓子横丁", price: 1500, rate: 50, owner: null }] },
+      { id: 216, name: "行田", type: "station", x: 25, y: 22, next: [217, 207], properties: [{ id: 0, name: "行田タワー", price: 1500, rate: 50, owner: null }] },
+      { id: 217, name: "さいたま", type: "station", x: 26, y: 22, next: [218, 216, 207], properties: [{ id: 0, name: "鉄道博物館", price: 1500, rate: 50, owner: null }] },
+      { id: 225, name: "", type: "normal", x: 27, y: 23, next: [218, 211] },
+      { id: 218, name: "東京", type: "station", x: 26, y: 23, next: [219, 217, 212, 215], properties: [{ id: 0, name: "東京タワー", price: 3000, rate: 50, owner: null }] },
+      { id: 219, name: "横浜", type: "station", x: 26, y: 24, next: [220, 221, 218], properties: [{ id: 0, name: "赤レンガ倉庫", price: 1500, rate: 50, owner: null }] },
+      { id: 220, name: "横須賀", type: "station", x: 26, y: 25, next: [221, 219, 214], properties: [{ id: 0, name: "海軍カレー", price: 1500, rate: 50, owner: null }] },
+      { id: 221, name: "鎌倉", type: "station", x: 25, y: 25, next: [324, 219, 220], properties: [{ id: 0, name: "鎌倉大仏", price: 1500, rate: 50, owner: null }] },
+
+      // 4. 中部・北陸エリア
+      { id: 300, name: "佐渡島", type: "station", x: 21, y: 17, next: [301], properties: [{ id: 0, name: "佐渡金山", price: 100000, rate: 99, owner: null }] },
+      { id: 301, name: "新潟", type: "station", x: 23, y: 18, next: [302, 304, 300], properties: [{ id: 0, name: "米菓工場", price: 1500, rate: 40, owner: null }] },
+      { id: 302, name: "三条", type: "station", x: 23, y: 19, next: [303, 301], properties: [{ id: 0, name: "町工場", price: 1500, rate: 50, owner: null }] },
+      { id: 303, name: "湯沢", type: "station", x: 23, y: 20, next: [312, 313, 302], properties: [{ id: 0, name: "ガーラ湯沢", price: 2000, rate: 35, owner: null }] },
+      { id: 304, name: "上越", type: "station", x: 22, y: 19, next: [306, 301], properties: [{ id: 0, name: "謙信そば", price: 1500, rate: 50, owner: null }] },
+      { id: 305, name: "立山", type: "station", x: 21, y: 21, next: [306], properties: [{ id: 0, name: "黒部ダム", price: 5000, rate: 50, owner: null }] },
+      { id: 306, name: "富山", type: "station", x: 20, y: 20, next: [307, 308, 304, 305], properties: [{ id: 0, name: "富山ブラックラーメン", price: 1200, rate: 45, owner: null }] },
+      { id: 307, name: "砺波", type: "station", x: 20, y: 21, next: [315, 306], properties: [{ id: 0, name: "チューリップ農園", price: 1500, rate: 50, owner: null }] },
+      { id: 308, name: "金沢", type: "station", x: 19, y: 20, next: [309, 310, 306], properties: [{ id: 0, name: "21世紀美術館", price: 5000, rate: 80, owner: null }] },
+      { id: 309, name: "能登", type: "station", x: 19, y: 19, next: [308], properties: [{ id: 0, name: "のとじま水族館", price: 3000, rate: 50, owner: null }] },
+      { id: 310, name: "加賀", type: "station", x: 19, y: 21, next: [318, 319, 308], properties: [{ id: 0, name: "手取フィッシュランド", price: 2000, rate: 45, owner: null }] },
+      { id: 311, name: "白馬", type: "station", x: 22, y: 20, next: [312], properties: [{ id: 0, name: "白馬村スキー場", price: 4500, rate: 50, owner: null }] },
+      { id: 312, name: "長野", type: "station", x: 22, y: 21, next: [314, 303, 311], properties: [{ id: 0, name: "善光寺名物七味", price: 1500, rate: 35, owner: null }] },
+      { id: 313, name: "軽井沢", type: "station", x: 23, y: 22, next: [314, 303, 209], properties: [{ id: 0, name: "軽井沢別邸", price: 2000, rate: 50, owner: null }] },
+      { id: 314, name: "諏訪", type: "station", x: 22, y: 22, next: [316, 322, 312, 313], properties: [{ id: 0, name: "精密機械工場", price: 1500, rate: 40, owner: null }] },
+      { id: 315, name: "白川", type: "station", x: 20, y: 22, next: [316, 307], properties: [{ id: 0, name: "白川郷", price: 1500, rate: 50, owner: null }] },
+      { id: 316, name: "下呂", type: "station", x: 21, y: 23, next: [317, 315, 314], properties: [{ id: 0, name: "下呂温泉", price: 1500, rate: 50, owner: null }] },
+      { id: 317, name: "岐阜", type: "station", x: 20, y: 24, next: [327, 401, 316], properties: [{ id: 0, name: "岐阜城", price: 7500, rate: 50, owner: null }] },
+      { id: 318, name: "勝山", type: "station", x: 19, y: 22, next: [319, 310], properties: [{ id: 0, name: "県立恐竜博物館", price: 5000, rate: 60, owner: null }] },
+      { id: 319, name: "鯖江", type: "station", x: 18, y: 22, next: [320, 318, 310], properties: [{ id: 0, name: "メガネ工場", price: 1500, rate: 50, owner: null }] },
+      { id: 320, name: "敦賀", type: "station", x: 17, y: 22, next: [411, 412, 319], properties: [{ id: 0, name: "越前蟹店", price: 1500, rate: 50, owner: null }] },
+      { id: 321, name: "富士", type: "station", x: 23, y: 25, next: [324, 322], properties: [{ id: 0, name: "宝石博物館", price: 3000, rate: 50, owner: null }] },
+      { id: 322, name: "甲府", type: "station", x: 23, y: 24, next: [321, 314], properties: [{ id: 0, name: "ほうとう店", price: 1500, rate: 50, owner: null }] },
+      { id: 323, name: "浜松", type: "station", x: 22, y: 27, next: [328, 329, 325], properties: [{ id: 0, name: "うなぎ店", price: 1500, rate: 50, owner: null }] },
+      { id: 324, name: "御殿場", type: "station", x: 24, y: 25, next: [325, 326, 321, 221], properties: [{ id: 0, name: "御殿場高原ビール", price: 1500, rate: 50, owner: null }] },
+      { id: 325, name: "静岡", type: "station", x: 23, y: 27, next: [323, 324, 326], properties: [{ id: 0, name: "茶畑", price: 1500, rate: 50, owner: null }] },
+      { id: 326, name: "伊豆", type: "station", x: 24, y: 27, next: [325, 324], properties: [{ id: 0, name: "いちご農園", price: 1500, rate: 50, owner: null }] },
+      { id: 327, name: "長久手", type: "station", x: 20, y: 25, next: [328, 317], properties: [{ id: 0, name: "ジブリパーク", price: 1500, rate: 50, owner: null }] },
+      { id: 328, name: "豊田", type: "station", x: 21, y: 26, next: [329, 327, 323], properties: [{ id: 0, name: "自動車工場", price: 5000, rate: 30, owner: null }] },
+      { id: 329, name: "名古屋", type: "station", x: 20, y: 26, next: [402, 403, 328], properties: [{ id: 0, name: "ひつまぶし店", price: 1500, rate: 50, owner: null }] },
+      { id: 330, name: "", type: "normal", x: 24, y: 17, next: [117, 301] },
+      { id: 331, name: "", type: "normal", x: 24, y: 18, next: [117, 302] },
+      { id: 332, name: "カードマス", type: "yellow", x: 21, y: 22, next: [316, 312] },
+      { id: 333, name: "", type: "normal", x: 19, y: 23, next: [317, 319] },
+      { id: 334, name: "", type: "normal", x: 20, y: 23, next: [317, 316] },
+      { id: 335, name: "＋マス", type: "blue", x: 22, y: 23, next: [314, 322] },
+      { id: 336, name: "", type: "normal", x: 23, y: 23, next: [322, 313] },
+      { id: 337, name: "カードマス", type: "yellow", x: 24, y: 23, next: [322, 215] },
+      { id: 338, name: "", type: "normal", x: 25, y: 23, next: [218, 221] },
+      { id: 339, name: "", type: "normal", x: 21, y: 24, next: [327, 317] },
+      { id: 340, name: "", type: "normal", x: 22, y: 24, next: [327, 322] },
+      { id: 341, name: "", type: "normal", x: 24, y: 24, next: [324, 321] },
+      { id: 342, name: "-マス", type: "red", x: 25, y: 24, next: [221, 324] },
+      { id: 343, name: "カードマス", type: "yellow", x: 21, y: 25, next: [328, 327] },
+      { id: 344, name: "-マス", type: "red", x: 22, y: 25, next: [328, 325] },
+      { id: 345, name: "", type: "normal", x: 22, y: 26, next: [323, 328] },
+      { id: 346, name: "＋マス", type: "blue", x: 23, y: 26, next: [325, 323] },
+      { id: 347, name: "", type: "normal", x: 24, y: 26, next: [326, 325] },
+      { id: 348, name: "", type: "normal", x: 21, y: 27, next: [329, 323] },
+
+      // 5. 関西エリア
+      { id: 401, name: "琵琶湖", type: "station", x: 19, y: 24, next: [412, 317], properties: [{ id: 0, name: "近江牛ステーキ", price: 2500, rate: 35, owner: null }] },
+      { id: 402, name: "四日市", type: "station", x: 19, y: 26, next: [403, 329], properties: [{ id: 0, name: "四日市競輪場", price: 1500, rate: 50, owner: null }] },
+      { id: 403, name: "松阪", type: "station", x: 19, y: 27, next: [404, 402], properties: [{ id: 0, name: "松阪牛牧場", price: 1800, rate: 30, owner: null }] },
+      { id: 404, name: "伊勢", type: "station", x: 19, y: 28, next: [407, 403], properties: [{ id: 0, name: "伊勢神宮", price: 100000, rate: 30, owner: null }] },
+      { id: 405, name: "和歌山", type: "station", x: 16, y: 27, next: [406, 409], properties: [{ id: 0, name: "和歌山マリーナ", price: 4000, rate: 50, owner: null }] },
+      { id: 406, name: "有田", type: "station", x: 16, y: 28, next: [407, 405], properties: [{ id: 0, name: "みかん農場", price: 1500, rate: 50, owner: null }] },
+      { id: 407, name: "勝浦", type: "station", x: 17, y: 27, next: [409, 404, 406], properties: [{ id: 0, name: "生マグロ", price: 800, rate: 40, owner: null }] },
+      { id: 408, name: "奈良", type: "station", x: 17, y: 25, next: [409, 410, 412], properties: [{ id: 0, name: "奈良公園", price: 1500, rate: 50, owner: null }] },
+      { id: 409, name: "吉野", type: "station", x: 17, y: 26, next: [405, 408, 407], properties: [{ id: 0, name: "吉野杉林業", price: 800, rate: 50, owner: null }] },
+      { id: 410, name: "大阪", type: "station", x: 16, y: 25, next: [413, 414, 412, 408], properties: [{ id: 0, name: "通天閣", price: 1500, rate: 50, owner: null }] },
+      { id: 411, name: "京丹後", type: "station", x: 16, y: 23, next: [412, 415, 320], properties: [{ id: 0, name: "京都コシヒカリ", price: 1500, rate: 50, owner: null }] },
+      { id: 412, name: "京都", type: "station", x: 17, y: 24, next: [410, 408, 401, 411, 320], properties: [{ id: 0, name: "西陣織", price: 6000, rate: 50, owner: null }] },
+      { id: 413, name: "姫路", type: "station", x: 14, y: 25, next: [501, 502, 414], properties: [{ id: 0, name: "姫路城", price: 150000, rate: 30, owner: null }] },
+      { id: 414, name: "神戸", type: "station", x: 15, y: 25, next: [413, 416, 410], properties: [{ id: 0, name: "神戸牛ステーキ", price: 1200, rate: 40, owner: null }] },
+      { id: 415, name: "豊岡", type: "station", x: 15, y: 23, next: [501, 411], properties: [{ id: 0, name: "城崎温泉", price: 1500, rate: 50, owner: null }] },
+      { id: 416, name: "淡路", type: "station", x: 15, y: 27, next: [601, 603, 414], properties: [{ id: 0, name: "淡路玉ねぎ", price: 1000, rate: 60, owner: null }] },
+      { id: 417, name: "カードマス", type: "yellow", x: 14, y: 23, next: [415, 501] },
+      { id: 418, name: "", type: "normal", x: 17, y: 23, next: [411, 320] },
+      { id: 419, name: "＋マス", type: "blue", x: 18, y: 23, next: [320, 401] },
+      { id: 420, name: "", type: "normal", x: 14, y: 24, next: [413, 415] },
+      { id: 421, name: "＋マス", type: "blue", x: 15, y: 24, next: [414, 415] },
+      { id: 422, name: "", type: "normal", x: 16, y: 24, next: [410, 411] },
+      { id: 423, name: "", type: "normal", x: 18, y: 24, next: [401, 412] },
+      { id: 424, name: "", type: "normal", x: 18, y: 25, next: [408, 401] },
+      { id: 425, name: "", type: "normal", x: 19, y: 25, next: [317, 401] },
+      { id: 426, name: "", type: "normal", x: 16, y: 26, next: [405, 410] },
+      { id: 427, name: "＋マス", type: "blue", x: 18, y: 26, next: [409, 402] },
+      { id: 428, name: "カードマス", type: "yellow", x: 18, y: 27, next: [407, 403] },
+      { id: 429, name: "-マス", type: "red", x: 17, y: 28, next: [407, 406] },
+      { id: 430, name: "", type: "normal", x: 18, y: 28, next: [407, 404] },
+      { id: 431, name: "", type: "normal", x: 16, y: 29, next: [406, 603] },
+      { id: 432, name: "", type: "normal", x: 17, y: 29, next: [407, 603] },
+      { id: 433, name: "-マス", type: "red", x: 18, y: 29, next: [407, 404] },
+      { id: 434, name: "＋マス", type: "blue", x: 17, y: 30, next: [407, 606] },
+
+      // 6. 中国エリア
+      { id: 501, name: "鳥取", type: "station", x: 13, y: 23, next: [503, 413, 415], properties: [{ id: 0, name: "砂丘らっきょう", price: 500, rate: 50, owner: null }] },
+      { id: 502, name: "岡山", type: "station", x: 13, y: 25, next: [504, 413], properties: [{ id: 0, name: "後楽園", price: 1500, rate: 50, owner: null }] },
+      { id: 503, name: "大田", type: "station", x: 11, y: 23, next: [505, 501], properties: [{ id: 0, name: "石見銀山", price: 3000, rate: 75, owner: null }] },
+      { id: 504, name: "呉", type: "station", x: 11, y: 25, next: [505, 506, 502], properties: [{ id: 0, name: "大和ミュージアム", price: 3000, rate: 70, owner: null }] },
+      { id: 505, name: "長門", type: "station", x: 9, y: 23, next: [506, 507, 503], properties: [{ id: 0, name: "長門湯本温泉", price: 800, rate: 45, owner: null }] },
+      { id: 506, name: "山口", type: "station", x: 9, y: 24, next: [507, 504, 505], properties: [{ id: 0, name: "SLやまぐち号", price: 1500, rate: 50, owner: null }] },
+      { id: 507, name: "下関", type: "station", x: 9, y: 25, next: [704, 705, 505, 506], properties: [{ id: 0, name: "関門トンネル", price: 1200, rate: 45, owner: null }] },
+      { id: 508, name: "", type: "normal", x: 10, y: 23, next: [503, 505] },
+      { id: 509, name: "", type: "normal", x: 12, y: 23, next: [501, 503] },
+      { id: 510, name: "カードマス", type: "yellow", x: 10, y: 24, next: [506, 503] },
+      { id: 511, name: "", type: "normal", x: 11, y: 24, next: [504, 503] },
+      { id: 512, name: "＋マス", type: "blue", x: 12, y: 24, next: [502, 501] },
+      { id: 513, name: "", type: "normal", x: 13, y: 24, next: [413, 502] },
+      { id: 514, name: "", type: "normal", x: 10, y: 25, next: [507, 504] },
+      { id: 515, name: "", type: "normal", x: 12, y: 25, next: [502, 504] },
+      // 四国
+      { id: 601, name: "高松", type: "station", x: 14, y: 27, next: [602, 603, 416], properties: [{ id: 0, name: "あぶきなアリーナ", price: 800, rate: 50, owner: null }] },
+      { id: 602, name: "丸亀", type: "station", x: 13, y: 27, next: [608, 601], properties: [{ id: 0, name: "丸亀競艇場", price: 1500, rate: 50, owner: null }] },
+      { id: 603, name: "鳴門", type: "station", x: 14, y: 28, next: [604, 606, 601, 416], properties: [{ id: 0, name: "大塚国際美術館", price: 6000, rate: 50, owner: null }] },
+      { id: 604, name: "徳島", type: "station", x: 13, y: 28, next: [605, 603], properties: [{ id: 0, name: "すだち畑", price: 1500, rate: 50, owner: null }] },
+      { id: 605, name: "高知", type: "station", x: 12, y: 29, next: [607, 604, 606], properties: [{ id: 0, name: "カツオたたき屋", price: 1200, rate: 45, owner: null }] },
+      { id: 606, name: "北川", type: "station", x: 14, y: 30, next: [605, 603], properties: [{ id: 0, name: "モネの庭", price: 1500, rate: 50, owner: null }] },
+      { id: 607, name: "清水", type: "station", x: 10, y: 30, next: [610, 605], properties: [{ id: 0, name: "足摺海洋館", price: 4000, rate: 25, owner: null }] },
+      { id: 608, name: "今治", type: "station", x: 11, y: 27, next: [609, 602], properties: [{ id: 0, name: "今治タオル工場", price: 1500, rate: 50, owner: null }] },
+      { id: 609, name: "松山", type: "station", x: 10, y: 27, next: [610, 608], properties: [{ id: 0, name: "道後温泉", price: 1500, rate: 50, owner: null }] },
+      { id: 610, name: "八幡浜", type: "station", x: 10, y: 28, next: [607, 609], properties: [{ id: 0, name: "みかん畑", price: 1500, rate: 50, owner: null }] },
+      { id: 611, name: "カードマス", type: "yellow", x: 12, y: 27, next: [602, 601] },
+      { id: 612, name: "-マス", type: "red", x: 11, y: 28, next: [610, 608] },
+      { id: 613, name: "", type: "normal", x: 12, y: 28, next: [604, 602] },
+      { id: 614, name: "＋マス", type: "blue", x: 10, y: 29, next: [607, 610] },
+      { id: 615, name: "", type: "normal", x: 11, y: 29, next: [605, 610] },
+      { id: 616, name: "＋マス", type: "blue", x: 13, y: 29, next: [605, 604] },
+      { id: 617, name: "", type: "normal", x: 14, y: 29, next: [606, 603] },
+
+      // 7. 九州・沖縄エリア
+      { id: 701, name: "別府", type: "station", x: 8, y: 25, next: [702, 703, 705], properties: [{ id: 0, name: "別府温泉", price: 1000, rate: 55, owner: null }] },
+      { id: 702, name: "由布院", type: "station", x: 7, y: 26, next: [712, 716, 701], properties: [{ id: 0, name: "由布院温泉", price: 1500, rate: 50, owner: null }] },
+      { id: 703, name: "大分", type: "station", x: 8, y: 26, next: [715, 716, 701], properties: [{ id: 0, name: "うみたまご", price: 1500, rate: 30, owner: null }] },
+      { id: 704, name: "福岡", type: "station", x: 6, y: 24, next: [706, 708, 507], properties: [{ id: 0, name: "PayPayドーム", price: 1500, rate: 50, owner: null }] },
+      { id: 705, name: "北九州", type: "station", x: 7, y: 24, next: [701, 704, 507], properties: [{ id: 0, name: "北九州工業地帯", price: 5000, rate: 30, owner: null }] },
+      { id: 706, name: "太宰府", type: "station", x: 6, y: 25, next: [707, 704], properties: [{ id: 0, name: "太宰府天満宮", price: 1500, rate: 50, owner: null }] },
+      { id: 707, name: "筑後", type: "station", x: 6, y: 26, next: [712, 713, 706], properties: [{ id: 0, name: "あまおう果樹園", price: 2000, rate: 35, owner: null }] },
+      { id: 708, name: "佐賀", type: "station", x: 5, y: 25, next: [709, 711, 704], properties: [{ id: 0, name: "バルーンミュージアム", price: 1500, rate: 50, owner: null }] },
+      { id: 709, name: "嬉野", type: "station", x: 4, y: 26, next: [710, 708], properties: [{ id: 0, name: "嬉野温泉", price: 1500, rate: 50, owner: null }] },
+      { id: 710, name: "五島", type: "station", x: 2, y: 25, next: [711, 709], properties: [{ id: 0, name: "五島食材", price: 5000, rate: 20, owner: null }] },
+      { id: 711, name: "佐世保", type: "station", x: 3, y: 26, next: [713, 708, 710], properties: [{ id: 0, name: "ハウステンボス", price: 1500, rate: 50, owner: null }] },
+      { id: 712, name: "小国", type: "station", x: 6, y: 27, next: [713, 714, 702, 707], properties: [{ id: 0, name: "黒川温泉", price: 1000, rate: 50, owner: null }] },
+      { id: 713, name: "熊本", type: "station", x: 5, y: 27, next: [714, 719, 711, 707], properties: [{ id: 0, name: "くまもと空港", price: 1500, rate: 50, owner: null }] },
+      { id: 714, name: "人吉", type: "station", x: 6, y: 28, next: [715, 717, 712, 713], properties: [{ id: 0, name: "人吉鉄道館", price: 2500, rate: 30, owner: null }] },
+      { id: 715, name: "都城", type: "station", x: 7, y: 29, next: [717, 718, 703, 714], properties: [{ id: 0, name: "霧島酒造", price: 1500, rate: 50, owner: null }] },
+      { id: 716, name: "高千穂", type: "station", x: 7, y: 28, next: [715, 702, 703], properties: [{ id: 0, name: "あまてらす鉄道", price: 800, rate: 50, owner: null }] },
+      { id: 717, name: "桜島", type: "station", x: 6, y: 31, next: [718, 714, 715], properties: [{ id: 0, name: "桜島大根畑", price: 1500, rate: 50, owner: null }] },
+      { id: 718, name: "鹿児島", type: "station", x: 5, y: 31, next: [720, 717, 715], properties: [{ id: 0, name: "仙巌園", price: 1500, rate: 50, owner: null }] },
+      { id: 719, name: "薩摩", type: "station", x: 5, y: 29, next: [718, 717, 713], properties: [{ id: 0, name: "紫尾温泉", price: 1500, rate: 50, owner: null }] },
+      { id: 720, name: "屋久島", type: "station", x: 5, y: 32, next: [721, 719, 718], properties: [{ id: 0, name: "屋久杉ツアー", price: 1500, rate: 50, owner: null }] },
+      { id: 721, name: "那覇", type: "station", x: 1, y: 38, next: [722, 720], properties: [{ id: 0, name: "美ら海水族館", price: 4500, rate: 50, owner: null }] },
+      { id: 722, name: "今帰仁", type: "station", x: 2, y: 36, next: [721], properties: [{ id: 0, name: "ジャングリア沖縄", price: 1500, rate: 50, owner: null }] },
+      { id: 723, name: "", type: "normal", x: 4, y: 25, next: [708, 704] },
+      { id: 724, name: "-マス", type: "red", x: 7, y: 25, next: [705, 701] },
+      { id: 725, name: "＋マス", type: "blue", x: 5, y: 26, next: [708, 711] },
+      { id: 726, name: "", type: "normal", x: 4, y: 27, next: [709, 711] },
+      { id: 727, name: "＋マス", type: "blue", x: 7, y: 27, next: [702, 712] },
+      { id: 728, name: "", type: "normal", x: 5, y: 28, next: [713, 719] },
+      { id: 729, name: "カードマス", type: "yellow", x: 6, y: 29, next: [714, 715, 901] },
+      { id: 730, name: "カードマス", type: "yellow", x: 2, y: 37, next: [721, 722] },
+      { id: 731, name: "", type: "normal", x: 5, y: 30, next: [719, 718] },
+      { id: 732, name: "", type: "normal", x: 6, y: 30, next: [714, 717] },
+      { id: 733, name: "", type: "normal", x: 7, y: 30, next: [715, 717] },
+      { id: 734, name: "＋マス", type: "blue", x: 7, y: 31, next: [717, 715] },
+      { id: 735, name: "", type: "normal", x: 7, y: 27, next: [703, 716] },
+
+      // 特殊マス
+      { id: 801, name: "", type: "normal", x: 24, y: 3, next: [802, 0] },
+      { id: 802, name: "カードマス", type: "yellow", x: 19, y: 3, next: [803, 801] },
+      { id: 803, name: "-マス", type: "red", x: 14, y: 3, next: [804, 802] },
+      { id: 804, name: "-マス", type: "red", x: 9, y: 3, next: [805, 803] },
+      { id: 805, name: "イベント", type: "event", x: 7, y: 3, next: [806, 804] },
+      { id: 806, name: "-マス", type: "red", x: 7, y: 9, next: [807, 805] },
+      { id: 807, name: "＋マス", type: "blue", x: 7, y: 14, next: [808, 806] },
+      { id: 808, name: "", type: "normal", x: 7, y: 19, next: [705, 807] },
+
+      { id: 901, name: "＋マス", type: "blue", x: 5, y: 37, next: [902, 720] },
+      { id: 902, name: "カードマス", type: "yellow", x: 9, y: 37, next: [903, 901] },
+      { id: 903, name: "", type: "normal", x: 13, y: 37, next: [904, 902] },
+      { id: 904, name: "-マス", type: "red", x: 17, y: 37, next: [905, 903] },
+      { id: 905, name: "イベント", type: "event", x: 22, y: 37, next: [906, 904] },
+      { id: 906, name: "-マス", type: "red", x: 26, y: 37, next: [907, 905] },
+      { id: 907, name: "", type: "normal", x: 26, y: 33, next: [908, 906] },
+      { id: 908, name: "＋マス", type: "blue", x: 26, y: 29, next: [211, 907] }
+    ];
+
+    // 双方向接続補正
+    board.forEach(tile => {
+      tile.next.forEach(nextId => {
+        const target = board.find(t => t.id === nextId);
+        if (target && !target.next.includes(tile.id)) {
+          target.next.push(tile.id);
+        }
+      });
+    });
+
+    const CARD_TYPES = {
+      EXPRESS: { id: "express", name: "急行カード", diceCount: 2, desc: "サイコロを2個振れる！", weight: 3 },
+      SHINKANSEN: { id: "shinkansen", name: "新幹線カード", diceCount: 3, desc: "サイコロを3個振れる！", weight: 2 },
+      LINEAR: { id: "linear", name: "リニアカード", diceCount: 4, desc: "サイコロを4個振れる！", weight: 1 },
+      BONBY: { id: "bonby", name: "ボンビーカード", diceCount: 1, desc: "【危険】使うと自分に貧乏神が取り憑く！", weight: 94 },
+    };
+
+    function drawRandomCard() {
+      const cards = Object.values(CARD_TYPES);
+      const totalWeight = cards.reduce((sum, card) => sum + card.weight, 0);
+      let randomNum = Math.floor(Math.random() * totalWeight);
+
+      for (const card of cards) {
+        if (randomNum < card.weight) return card;
+        randomNum -= card.weight;
+      }
+      return cards[0];
+    }
+
+    let currentPlayerIndex = 0;
+    let currentYear = 1;  
+    let currentMonth = 4; 
+    let destinationId = null;
+    let bonbyOwner = null;
+    let canBuyProperties = false;
+    let isOverallMapView = false;
+    let branchResolve = null;
+
+    function updatePlayerConfigs() {
+      const p2 = document.getElementById("p2-type").value;
+      const p3 = document.getElementById("p3-type").value;
+
+      if (p2 === "none") {
+        document.getElementById("p3-type").value = "none";
+        document.getElementById("p4-type").value = "none";
+      } else if (p3 === "none") {
+        document.getElementById("p4-type").value = "none";
+      }
+    }
+
+    function startSingleOrHostGame() {
+      const p2Type = document.getElementById("p2-type").value;
+      const p3Type = document.getElementById("p3-type").value;
+      const p4Type = document.getElementById("p4-type").value;
+
+      cpuLevel = document.getElementById("cpu-level-select").value;
+      gameMode = document.getElementById("game-mode-select").value;
+
+      // 3年決戦のみ初期資金5000万円
+      const startMoney = (gameMode === "3years") ? 5000 : 1500;
+
+      const types = ["human", p2Type, p3Type, p4Type].filter(t => t !== "none");
+
+      if (types.length < 2) {
+        alert("最低2人以上のプレイヤーを設定してください。");
+        return;
+      }
+
+      players = types.map((type, idx) => {
+        const template = ALL_PLAYER_TEMPLATES.find((t, tIdx) => {
+          if (idx === 0) return t.id === "p1";
+          if (idx === 1) return t.id === "p2";
+          if (idx === 2) return t.id === (p3Type !== "none" ? "p3" : "p4");
+          return t.id === "p4";
+        }) || ALL_PLAYER_TEMPLATES[idx];
+
+        return {
+          ...template,
+          isCpu: (type === "cpu"),
+          money: startMoney,
+          position: 0,
+          cards: [],
+          lastPosition: null
+        };
+      });
+
+      const hasRemoteHuman = types.slice(1).some(t => t === "human");
+
+      if (hasRemoteHuman) {
+        const status = document.getElementById("lobby-status");
+        status.innerText = "オンライン対戦部屋を作成中...";
+        peer = new Peer();
+
+        peer.on('open', (id) => {
+          myPlayerId = 'p1';
+          status.innerHTML = `部屋作成成功！<br>対戦相手に以下のIDを伝えてください：<br><span style="font-size:18px; color:#1e88e5;">${id}</span><br>参加を待っています...`;
+        });
+
+        peer.on('connection', (conn) => {
+          connections.push(conn);
+          conn.on('open', () => {
+            const assignedIdx = connections.length;
+            const assignedPlayer = players[assignedIdx];
+
+            conn.send({ type: 'ASSIGN_ROLE', payload: { playerId: assignedPlayer.id } });
+            
+            document.getElementById("lobby-modal").style.display = "none";
+            initHostGame();
+          });
+
+          conn.on('data', (data) => handleRemoteData(data));
+        });
+      } else {
+        myPlayerId = 'p1';
+        document.getElementById("lobby-modal").style.display = "none";
+        initHostGame();
+      }
+    }
+
+    function joinRoom() {
+      const roomId = document.getElementById("join-room-id").value.trim();
+      const status = document.getElementById("lobby-status");
+
+      if (!roomId) {
+        alert("部屋IDを入力してください");
+        return;
+      }
+
+      status.innerText = "接続中...";
+      peer = new Peer();
+
+      peer.on('open', () => {
+        const conn = peer.connect(roomId);
+        connections = [conn];
+
+        conn.on('open', () => {
+          status.innerText = "接続成功！ホストからの開始を待っています...";
+        });
+
+        conn.on('data', (data) => handleRemoteData(data));
+      });
+
+      peer.on('error', (err) => {
+        status.innerText = "接続エラー: 部屋IDを確認してください。";
+      });
+    }
+
+    function sendData(type, payload = {}) {
+      connections.forEach(conn => {
+        if (conn && conn.open) conn.send({ type, payload });
+      });
+    }
+
+    function syncGameState() {
+      if (myPlayerId === 'p1') {
+        const state = {
+          players,
+          currentPlayerIndex,
+          currentYear,
+          currentMonth,
+          destinationId,
+          bonbyOwner,
+          canBuyProperties,
+          gameMode,
+          isGameOver,
+          propertiesOwnerState: getPropertiesOwnerState()
+        };
+        sendData('SYNC_STATE', state);
+      }
+    }
+
+    function getPropertiesOwnerState() {
+      const state = {};
+      board.forEach(tile => {
+        if (tile.type === "station") {
+          state[tile.id] = tile.properties.map(p => ({ id: p.id, owner: p.owner }));
+        }
+      });
+      return state;
+    }
+
+    function applyPropertiesOwnerState(state) {
+      if (!state) return;
+      board.forEach(tile => {
+        if (tile.type === "station" && state[tile.id]) {
+          state[tile.id].forEach(pState => {
+            const prop = tile.properties.find(p => p.id === pState.id);
+            if (prop) prop.owner = pState.owner;
+          });
+        }
+      });
+    }
+
+    function handleRemoteData(data) {
+      const { type, payload } = data;
+
+      switch (type) {
+        case 'ASSIGN_ROLE':
+          myPlayerId = payload.playerId;
+          document.getElementById("lobby-modal").style.display = "none";
+          break;
+
+        case 'SYNC_STATE':
+          players = payload.players;
+          currentPlayerIndex = payload.currentPlayerIndex;
+          currentYear = payload.currentYear;
+          currentMonth = payload.currentMonth;
+          destinationId = payload.destinationId;
+          bonbyOwner = payload.bonbyOwner;
+          canBuyProperties = payload.canBuyProperties;
+          gameMode = payload.gameMode || "3years";
+          isGameOver = payload.isGameOver || false;
+          applyPropertiesOwnerState(payload.propertiesOwnerState);
+
+          const destTile = board.find(t=>t.id===destinationId);
+          if (destTile) {
+            document.getElementById("destination-name").innerText = `${destTile.name}駅`;
+            document.getElementById("bar-dest-name").innerText = `${destTile.name}駅`;
+          }
+          document.getElementById("date-display").innerText = `${currentYear}年目 ${currentMonth}月`;
+
+          renderBoard();
+          updateControlsState();
+          checkCpuTurnTrigger();
+          break;
+
+        case 'ACTION_ROLL_DICE':
+          executeDiceRoll(payload.diceCount, payload.diceResults);
+          break;
+
+        case 'BRANCH_CHOSEN':
+          if (branchResolve) {
+            branchResolve(payload.nextTileId);
+            branchResolve = null;
+          }
+          break;
+
+        case 'BUY_PROPERTY':
+          buyPropertyLocal(payload.stationId, payload.propertyId, payload.playerId);
+          break;
+
+        case 'NEXT_TURN':
+          nextTurnLocal();
+          break;
+
+        case 'SHOW_KESSAN':
+          if (payload.isQuarterly) execQuarterlyKessanLocal();
+          else execKessanLocal();
+          break;
+
+        case 'CLOSE_KESSAN':
+          closeKessanLocal();
+          break;
+      }
+    }
+
+    function updateControlsState() {
+      if (isGameOver) {
+        document.getElementById("dice-btn").disabled = true;
+        document.getElementById("card-btn").disabled = true;
+        document.getElementById("next-btn").style.display = "none";
+        document.getElementById("message").innerText = "🏆 ゲーム終了です！お疲れ様でした！";
+        return;
+      }
+
+      const curPlayer = getCurrentPlayer();
+      const isMyTurn = (curPlayer.id === myPlayerId && !curPlayer.isCpu);
+
+      const diceBtn = document.getElementById("dice-btn");
+      const cardBtn = document.getElementById("card-btn");
+
+      diceBtn.disabled = !isMyTurn;
+      cardBtn.disabled = !isMyTurn || (curPlayer.cards.length === 0);
+
+      if (curPlayer.isCpu) {
+        document.getElementById("message").innerText = `🤖 ${curPlayer.name}(CPU) の思考中...`;
+      } else if (isMyTurn) {
+        document.getElementById("message").innerText = "あなたのターンです！操作を選択してください。";
+      } else {
+        document.getElementById("message").innerText = `${curPlayer.name} の操作を待っています...`;
+      }
+    }
+
+    function initHostGame() {
+      setRandomStartPositions();
+      setNextDestination();
+      renderBoard();
+      updateControlsState();
+      syncGameState();
+      checkCpuTurnTrigger();
+    }
+
+    function setRandomStartPositions() {
+      const stations = board.filter(tile => tile.type === "station");
+      const randomStation = stations[Math.floor(Math.random() * stations.length)];
+      players.forEach(p => p.position = randomStation.id);
+    }
+
+    function getCurrentPlayer() {
+      return players[currentPlayerIndex] || players[0];
+    }
+
+    function updateCameraPosition() {
+      const outer = document.getElementById("map-outer");
+      const container = document.getElementById("map");
+      const headerBar = document.getElementById("overall-header");
+
+      if (!outer || !container) return;
+
+      if (isOverallMapView) {
+        const mapWidth = 40 * (26 + 4) + 40;
+        const mapHeight = 40 * (26 + 4) + 40;
+
+        const scaleX = outer.clientWidth / mapWidth;
+        const scaleY = outer.clientHeight / mapHeight;
+        const scale = Math.min(scaleX, scaleY) * 0.9;
+
+        const offsetX = (outer.clientWidth - mapWidth * scale) / 2;
+        const offsetY = (outer.clientHeight - mapHeight * scale) / 2;
+
+        container.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+        headerBar.style.display = "flex";
+      } else {
+        const curPlayer = getCurrentPlayer();
+        const currentTile = board.find(t => t.id === curPlayer.position) || board[0];
+
+        const tileSize = 26 + 4;
+        const tileCenterX = currentTile.x * tileSize + 13;
+        const tileCenterY = currentTile.y * tileSize + 13;
+
+        const outerCenterX = outer.clientWidth / 2;
+        const outerCenterY = outer.clientHeight / 2;
+
+        const offsetX = outerCenterX - (tileCenterX * 2.0);
+        const offsetY = outerCenterY - (tileCenterY * 2.0);
+
+        container.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(2.0)`;
+        headerBar.style.display = "none";
+      }
+    }
+
+    function toggleMapView() {
+      isOverallMapView = !isOverallMapView;
+      const btn = document.getElementById("map-toggle-btn");
+      if (isOverallMapView) {
+        btn.innerText = "🔍 ズームイン";
+        btn.style.background = "#2196F3";
+      } else {
+        btn.innerText = "🗺️ 全体マップを開く";
+        btn.style.background = "#ff9800";
+      }
+      updateCameraPosition();
+    }
+
+    function setNextDestination() {
+      const stations = board.filter(tile => tile.type === "station");
+      let newDest;
+      do {
+        const randomIndex = Math.floor(Math.random() * stations.length);
+        newDest = stations[randomIndex];
+      } while (destinationId !== null && newDest.id === destinationId);
+
+      destinationId = newDest.id;
+      document.getElementById("destination-name").innerText = `${newDest.name}駅`;
+      document.getElementById("bar-dest-name").innerText = `${newDest.name}駅`;
+    }
+
+    function renderBoard() {
+      const mapContainer = document.getElementById("map");
+      mapContainer.innerHTML = "";
+
+      board.forEach((tile) => {
+        const tileDiv = document.createElement("div");
+        tileDiv.className = `tile ${tile.type}`;
+        tileDiv.style.gridColumn = tile.x + 1;
+        tileDiv.style.gridRow = tile.y + 1;
+        tileDiv.innerText = tile.name;
+        tileDiv.onclick = () => showTileInfo(tile);
+
+        if (tile.id === destinationId) {
+          const badge = document.createElement("div");
+          badge.className = "dest-badge";
+          badge.innerText = "🎯 目的地";
+          tileDiv.appendChild(badge);
+        }
+
+        players.forEach((p, idx) => {
+          if (p.position === tile.id) {
+            const pIcon = document.createElement("div");
+            pIcon.className = `player-icon p-${idx}`;
+            pIcon.innerText = p.icon;
+            tileDiv.appendChild(pIcon);
+          }
+        });
+
+        if (bonbyOwner !== null) {
+          const bonbyPlayer = players.find(p => p.id === bonbyOwner);
+          if (bonbyPlayer && tile.id === bonbyPlayer.position) {
+            const bonbyIcon = document.createElement("div");
+            bonbyIcon.className = "bonby-icon";
+            bonbyIcon.innerText = "👹";
+            tileDiv.appendChild(bonbyIcon);
+          }
+        }
+
+        mapContainer.appendChild(tileDiv);
+      });
+
+      const statusContainer = document.getElementById("status-container");
+      statusContainer.innerHTML = "";
+      const barInfo = document.getElementById("bar-players-info");
+      barInfo.innerHTML = "";
+
+      players.forEach((p, idx) => {
+        const isActive = (idx === currentPlayerIndex);
+        const card = document.createElement("div");
+        card.className = `status-card ${isActive ? 'active' : ''}`;
+        
+        const isBonby = (bonbyOwner === p.id) ? "👹" : "";
+        const cpuTag = p.isCpu ? "🤖" : "";
+
+        card.innerHTML = `
+          <div class="status-item">
+            <span class="label" style="color:${p.color}">${p.icon} ${p.name} ${cpuTag} ${isBonby}</span>
+            <span class="value" style="color:${p.color}">${p.money} 万円</span>
+          </div>
+          <small style="display:block; color:#666; font-size:10px;">カード: ${p.cards.map(c => c.name).join(", ") || "なし"}</small>
+        `;
+        statusContainer.appendChild(card);
+
+        barInfo.innerHTML += `<span style="color:${p.color}; font-weight:bold; margin-right:8px;">${p.icon}${p.money}万</span>`;
+      });
+
+      if (players.length > 0) {
+        const curPlayer = getCurrentPlayer();
+        const turnBanner = document.getElementById("turn-banner");
+        turnBanner.style.background = `linear-gradient(135deg, ${curPlayer.color}, #333)`;
+        turnBanner.innerText = `👉 ${curPlayer.icon} ${curPlayer.name}${curPlayer.isCpu ? '(CPU)' : ''} のターン`;
+      }
+
+      updateCameraPosition();
+    }
+
+    function showTileInfo(tile) {
+      const title = document.getElementById("panel-title");
+      const content = document.getElementById("panel-content");
+      const curPlayer = getCurrentPlayer();
+
+      const isDestText = (tile.id === destinationId) ? " 🎯目的地" : "";
+      title.innerText = `${tile.name} (${getTileTypeName(tile.type)})${isDestText}`;
+
+      if (tile.type === "station") {
+        let html = '<ul class="property-list">';
+        tile.properties.forEach((prop) => {
+          const isAtStation = (curPlayer.position === tile.id);
+          const isMyTurn = (curPlayer.id === myPlayerId && !curPlayer.isCpu);
+          const canBuy = isAtStation && canBuyProperties && isMyTurn && (prop.owner === null) && (curPlayer.money >= prop.price) && !isGameOver;
+
+          html += `
+            <li class="property-item">
+              <div>
+                <strong>🏠 ${prop.name}</strong><br>
+                <small>${prop.price}万円 (収益率${prop.rate}%)</small>
+              </div>
+              <div>`;
+
+          if (prop.owner !== null) {
+            const ownerP = players.find(p => p.id === prop.owner);
+            html += `<span class="owned-tag" style="color:${ownerP ? ownerP.color : '#333'}">✅ ${ownerP ? ownerP.name : ''}所有</span>`;
+          } else if (isAtStation) {
+            html += `<button class="buy-btn" ${canBuy ? "" : "disabled"} onclick="buyProperty(${tile.id}, ${prop.id}, '${curPlayer.id}')">購入する</button>`;
+          } else {
+            html += `<small style="color:#888;">(未購入)</small>`;
+          }
+
+          html += `</div></li>`;
+        });
+        html += '</ul>';
+        content.innerHTML = html;
+      } else {
+        content.innerHTML = `<p>${getTileTypeName(tile.type)} のマスです。</p>`;
+      }
+    }
+
+    function buyProperty(stationId, propertyId, playerId) {
+      if (!canBuyProperties || isGameOver) return;
+      
+      buyPropertyLocal(stationId, propertyId, playerId);
+      sendData('BUY_PROPERTY', { stationId, propertyId, playerId });
+      syncGameState();
+    }
+
+    function buyPropertyLocal(stationId, propertyId, playerId) {
+      const station = board.find(s => s.id === stationId);
+      if (!station) return;
+      const property = station.properties.find(p => p.id === propertyId);
+      const purchasingPlayer = players.find(p => p.id === playerId) || getCurrentPlayer();
+
+      if (property && purchasingPlayer.money >= property.price && property.owner === null) {
+        purchasingPlayer.money -= property.price;
+        property.owner = purchasingPlayer.id;
+
+        renderBoard();
+        document.getElementById("message").innerText = `🎉 ${purchasingPlayer.name} が ${property.name} を ${property.price}万円 で購入しました！`;
+        showTileInfo(station);
+      }
+    }
+
+    function getTileTypeName(type) {
+      if (type === "station") return "物件駅";
+      if (type === "blue") return "プラスマス";
+      if (type === "red") return "マイナスマス";
+      if (type === "yellow") return "カードマス";
+      if (type === "event") return "イベントマス";
+      if (type === "normal") return "ノーマルマス";
+      if (type === "bonby") return "貧乏神マス";
+      return "";
+    }
+
+    async function checkCpuTurnTrigger() {
+      if (myPlayerId !== 'p1' || isGameOver) return;
+
+      const curPlayer = getCurrentPlayer();
+      if (!curPlayer || !curPlayer.isCpu || isCpuProcessing) return;
+
+      isCpuProcessing = true; // ロック設定
+
+      try {
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        const expressCardIndex = curPlayer.cards.findIndex(c => c.id !== "bonby");
+        if (expressCardIndex !== -1 && Math.random() < 0.5) {
+          await useCard(expressCardIndex);
+        } else {
+          await rollDiceInternal();
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const curTile = board.find(t => t.id === curPlayer.position);
+        if (curTile && curTile.type === "station") {
+          curTile.properties.forEach(prop => {
+            if (prop.owner === null && curPlayer.money >= prop.price) {
+              buyPropertyLocal(curTile.id, prop.id, curPlayer.id);
+            }
+          });
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 800));
+        nextTurn();
+      } catch (err) {
+        console.error("CPUターン中にエラーが発生しました:", err);
+      } finally {
+        isCpuProcessing = false; // 確実にロック解除
+      }
+    }
+
+    async function rollDice(diceCount = 1) {
+      if (getCurrentPlayer().id !== myPlayerId || getCurrentPlayer().isCpu || isGameOver) return;
+      await rollDiceInternal(diceCount);
+    }
+
+    async function rollDiceInternal(diceCount = 1) {
+      document.getElementById("dice-btn").disabled = true;
+      document.getElementById("card-btn").disabled = true;
+
+      const diceResults = [];
+      for (let d = 0; d < diceCount; d++) {
+        diceResults.push(Math.floor(Math.random() * 6) + 1);
+      }
+
+      sendData('ACTION_ROLL_DICE', { diceCount, diceResults });
+      await executeDiceRoll(diceCount, diceResults);
+    }
+
+    // 最短距離（マス数）を計算する関数 (幅優先探索: BFS)
+    function getDistanceToDestination(startTileId, targetTileId) {
+      if (startTileId === targetTileId) return 0;
+
+      const queue = [{ id: startTileId, dist: 0 }];
+      const visited = new Set([startTileId]);
+
+      while (queue.length > 0) {
+        const { id, dist } = queue.shift();
+        const currentTile = board.find(t => t.id === id);
+
+        if (!currentTile) continue;
+
+        for (const nextId of currentTile.next) {
+          if (nextId === targetTileId) return dist + 1;
+          if (!visited.has(nextId)) {
+            visited.add(nextId);
+            queue.push({ id: nextId, dist: dist + 1 });
+          }
+        }
+      }
+      return 999;
+    }
+
+    async function executeDiceRoll(diceCount, diceResults) {
+      canBuyProperties = false;
+      if (isOverallMapView) toggleMapView();
+
+      const curPlayer = getCurrentPlayer();
+      let totalDiceValue = diceResults.reduce((a, b) => a + b, 0);
+
+      const diceText = (diceCount > 1) ? `🎲 [${diceResults.join(" + ")}] = ${totalDiceValue}` : `🎲 ${totalDiceValue}`;
+      document.getElementById("message").innerText = `${curPlayer.name} は ${diceText} が出ました！`;
+
+      for (let i = 0; i < totalDiceValue; i++) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        const currentTile = board.find(t => t.id === curPlayer.position);
+        let nextTileId;
+
+        const availableNext = currentTile.next.filter(id => id !== curPlayer.lastPosition);
+
+        if (availableNext.length > 1) {
+          if (curPlayer.isCpu && myPlayerId === 'p1') {
+            // 最短ルートのマスを取得
+            let bestNextId = availableNext[0];
+            let minDistance = 999;
+
+            for (const nextId of availableNext) {
+              const dist = getDistanceToDestination(nextId, destinationId);
+              if (dist < minDistance) {
+                minDistance = dist;
+                bestNextId = nextId;
+              }
+            }
+
+            // 難易度に応じた最短ルート選択確率の判定
+            let chooseBestRate = 1.0;
+            if (cpuLevel === "easy") chooseBestRate = 0.4;
+            if (cpuLevel === "normal") chooseBestRate = 0.75;
+
+            if (Math.random() < chooseBestRate) {
+              nextTileId = bestNextId;
+            } else {
+              nextTileId = availableNext[Math.floor(Math.random() * availableNext.length)];
+            }
+          } else {
+            nextTileId = await promptBranchChoice(availableNext);
+          }
+        } else if (availableNext.length === 1) {
+          nextTileId = availableNext[0];
+        } else {
+          nextTileId = currentTile.next[0];
+        }
+
+        curPlayer.lastPosition = curPlayer.position;
+        curPlayer.position = nextTileId;
+
+        checkBonbyPass();
+        checkBonbyTile(board.find(t => t.id === curPlayer.position));
+
+        renderBoard();
+      }
+
+      const endTile = board.find(t => t.id === curPlayer.position);
+      canBuyProperties = true;
+
+      checkDestinationGoal(endTile);
+      handleTileEffect(endTile);
+      showTileInfo(endTile);
+
+      // 貧乏神の1/2発動チェック
+      if (myPlayerId === 'p1' && bonbyOwner === curPlayer.id) {
+        if (Math.random() < 0.5) {
+          await new Promise(resolve => setTimeout(resolve, 600));
+          await handleBonbyAction();
+        }
+      }
+
+      document.getElementById("dice-btn").style.display = "none";
+      document.getElementById("card-btn").style.display = "none";
+
+      if (curPlayer.id === myPlayerId && !curPlayer.isCpu && !isGameOver) {
+        document.getElementById("next-btn").style.display = "inline-block";
+      }
+
+      syncGameState();
+    }
+
+    function nextTurn() {
+      if (isGameOver) return;
+      if (myPlayerId === 'p1' || getCurrentPlayer().id === myPlayerId) {
+        sendData('NEXT_TURN');
+        nextTurnLocal();
+      }
+    }
+
+    function nextTurnLocal() {
+      canBuyProperties = false;
+      isCpuProcessing = false; // CPUロック初期化
+
+      document.getElementById("next-btn").style.display = "none";
+      document.getElementById("dice-btn").style.display = "inline-block";
+      document.getElementById("card-btn").style.display = "inline-block";
+
+      switchTurn();
+    }
+
+    function promptBranchChoice(nextTileIds) {
+      return new Promise(resolve => {
+        branchResolve = resolve;
+
+        if (getCurrentPlayer().id !== myPlayerId) {
+          document.getElementById("message").innerText = `${getCurrentPlayer().name} が分岐を選択中...`;
+          return;
+        }
+
+        const modal = document.getElementById("branch-modal");
+        const modalContent = document.getElementById("branch-modal-content");
+        const container = document.getElementById("branch-modal-body");
+        
+        modalContent.style.top = "50%";
+        modalContent.style.left = "50%";
+        modalContent.classList.remove("minimized");
+        document.getElementById("branch-minimize-btn").innerText = "ー";
+        
+        container.innerHTML = "";
+
+        nextTileIds.forEach(id => {
+          const tile = board.find(t => t.id === id);
+          if(!tile) return;
+          const btn = document.createElement("button");
+          btn.className = "branch-btn";
+          btn.innerText = `👉 ${tile.name || getTileTypeName(tile.type)} 方面`;
+          btn.onclick = () => {
+            modal.style.display = "none";
+            sendData('BRANCH_CHOSEN', { nextTileId: id });
+            resolve(id);
+            branchResolve = null;
+          };
+          container.appendChild(btn);
+        });
+
+        modal.style.display = "flex";
+      });
+    }
+
+    function checkBonbyTile(tile) {
+      const curPlayer = getCurrentPlayer();
+      if (tile && tile.type === "bonby" && bonbyOwner !== curPlayer.id) {
+        bonbyOwner = curPlayer.id;
+        document.getElementById("message").innerText += ` 👹 貧乏神マスを踏んだ！貧乏神が ${curPlayer.name} に憑りついた！`;
+      }
+    }
+
+    function checkBonbyPass() {
+      if (bonbyOwner === null) return;
+
+      const curPlayer = getCurrentPlayer();
+      const otherPlayers = players.filter(p => p.id !== curPlayer.id);
+
+      otherPlayers.forEach(other => {
+        if (curPlayer.position === other.position && bonbyOwner === curPlayer.id) {
+          bonbyOwner = other.id;
+          document.getElementById("message").innerText += ` 👹 貧乏神を ${other.name} になすりつけた！`;
+        }
+      });
+    }
+
+    async function handleBonbyAction() {
+      if (bonbyOwner === null) return;
+
+      const victim = players.find(p => p.id === bonbyOwner);
+      if (!victim) return;
+
+      const rand = Math.random();
+
+      let ownedProperties = [];
+      board.forEach(tile => {
+        if (tile.type === "station") {
+          tile.properties.forEach(p => {
+            if (p.owner === victim.id) ownedProperties.push(p);
+          });
+        }
+      });
+
+      if (rand < 0.4) {
+        const loss = (Math.floor(Math.random() * 5) + 2) * 100;
+        victim.money -= loss;
+        alert(`👹 貧乏神「ほい〜！ ${victim.name} のおサイフから ${loss}万円 ポイしておいたのねん！」`);
+      } else if (rand < 0.7 && victim.cards.length > 0) {
+        const lostCardIndex = Math.floor(Math.random() * victim.cards.length);
+        const lostCard = victim.cards.splice(lostCardIndex, 1)[0];
+        alert(`👹 貧乏神「【${lostCard.name}】なんて要らないのねん！ ビリビリ〜！」`);
+      } else if (ownedProperties.length > 0) {
+        const lostProp = ownedProperties[Math.floor(Math.random() * ownedProperties.length)];
+        lostProp.owner = null;
+        alert(`👹 貧乏神「${victim.name} が持ってる【${lostProp.name}】を勝手に売ってきたのねん！」`);
+      } else {
+        const loss = 300;
+        victim.money -= loss;
+        alert(`👹 貧乏神「ヒマだから ${victim.name} から ${loss}万円 もらっておくのねん！」`);
+      }
+
+      renderBoard();
+      syncGameState();
+    }
+
+    async function autoTriggerBonbyCard() {
+      const curPlayer = getCurrentPlayer();
+  
+      bonbyOwner = curPlayer.id;
+      renderBoard();
+
+      alert(`👹 呪いの効果！【ボンビーカード】が強制発動！\n${curPlayer.name} に貧乏神が取り憑きました！`);
+
+      document.getElementById("message").innerText = `👹 ${curPlayer.name} に貧乏神が取り憑きました！`;
+
+      if (curPlayer.id === myPlayerId && !curPlayer.isCpu) {
+        document.getElementById("next-btn").style.display = "inline-block";
+      } else if (myPlayerId === 'p1' && curPlayer.isCpu) {
+        await new Promise(resolve => setTimeout(resolve, 800));
+        nextTurn();
+      }
+    }
+
+    function openCardModal() {
+      if (getCurrentPlayer().id !== myPlayerId || isGameOver) return;
+
+      const curPlayer = getCurrentPlayer();
+      const body = document.getElementById("card-modal-body");
+
+      if (curPlayer.cards.length === 0) {
+        body.innerHTML = "<p>カードを持っていません。</p>";
+      } else {
+        let html = '<ul class="card-use-list">';
+        curPlayer.cards.forEach((card, index) => {
+          html += `
+            <li class="card-use-item">
+              <div>
+                <strong>${card.name}</strong><br>
+                <small style="color:#666;">${card.desc}</small>
+              </div>
+              <button style="background:#9c27b0; color:white; font-size:11px; padding:3px 8px;" onclick="useCard(${index})">使う</button>
+            </li>`;
+        });
+        html += '</ul>';
+        body.innerHTML = html;
+      }
+
+      document.getElementById("card-modal").style.display = "flex";
+    }
+
+    function closeCardModal() {
+      document.getElementById("card-modal").style.display = "none";
+    }
+
+    async function useCard(cardIndex) {
+      const curPlayer = getCurrentPlayer();
+      if (curPlayer.cards.length <= cardIndex) return;
+
+      const usedCard = curPlayer.cards.splice(cardIndex, 1)[0];
+      closeCardModal();
+        
+      if (usedCard.id === "bonby") {
+        bonbyOwner = curPlayer.id;
+        renderBoard();
+        alert(`👹 ボンビーカードの効果！ ${curPlayer.name} に貧乏神が取り憑いた！`);
+        renderBoard();
+        
+        if (curPlayer.id === myPlayerId && !curPlayer.isCpu) {
+          document.getElementById("dice-btn").style.display = "none";
+          document.getElementById("card-btn").style.display = "none";
+          document.getElementById("next-btn").style.display = "inline-block";
+        }
+      } else {
+        renderBoard();
+        await rollDiceInternal(usedCard.diceCount);
+      }
+    }
+
+    function switchTurn() {
+      if (isGameOver) return;
+
+      currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+
+      if (currentPlayerIndex === 0) {
+        advanceCalendar();
+      } else {
+        renderBoard();
+      }
+
+      updateControlsState();
+
+      const curPlayer = getCurrentPlayer();
+      const currentTile = board.find(t => t.id === curPlayer.position);
+      if (currentTile) showTileInfo(currentTile);
+
+      syncGameState();
+      checkCpuTurnTrigger();
+    }
+
+    function checkDestinationGoal(tile) {
+      const curPlayer = getCurrentPlayer();
+      if (tile && tile.id === destinationId) {
+        const prizeMoney = 5000;
+        curPlayer.money += prizeMoney;
+        
+        bonbyOwner = null;
+
+        alert(`🎊 祝！ ${curPlayer.name} が ${tile.name} に一番乗りで到着しました！\n💰 到着賞金として 【${prizeMoney}万円】 を獲得！\n👹 貧乏神は姿を消しました！`);
+        
+        if (myPlayerId === 'p1') {
+          setNextDestination();
+        }
+        renderBoard();
+      }
+    }
+
+    function triggerRandomEvent(player) {
+      const events = [
+        { 
+          name: "宝くじ当選！", 
+          effect: () => { 
+            player.money += 1000; 
+            alert(`🎉 ${player.name} は宝くじで1000万円当たった！`); 
+          } 
+        },
+        { 
+          name: "スリ被害…", 
+          effect: () => { 
+            player.money = Math.max(0, player.money - 500); 
+            alert(`💸 ${player.name} は500万円スられた！`); 
+          } 
+        },
+        { 
+          name: "カード拾得！", 
+          effect: () => {
+            const randomCard = drawRandomCard();
+            if (randomCard.id === "bonby") {
+              bonbyOwner = player.id;
+              alert(`👹 ナンデスト！ 拾ったカードから貧乏神が飛び出してきた！\n${player.name} に貧乏神が取り憑いた！`);
+              renderBoard();
+            } else {
+              if (player.cards.length < 3) {
+                player.cards.push(randomCard);
+                alert(`🎴 ${player.name} は【${randomCard.name}】を拾った！`);
+              } else {
+                alert(`🎴 ${player.name} は【${randomCard.name}】を拾ったが、手札がいっぱいで諦めた…`);
+              }
+            }
+          } 
+        }
+      ];
+
+      const selected = events[Math.floor(Math.random() * events.length)];
+      selected.effect();
+    }
+
+    function handleTileEffect(tile) {
+      if(!tile) return;
+      const msg = document.getElementById("message");
+      const curPlayer = getCurrentPlayer();
+
+      if (tile.type === "blue") {
+        curPlayer.money += 500;
+        msg.innerText += " 👉 青マス！500万円 GET！";
+      } else if (tile.type === "red") {
+        curPlayer.money -= 300;
+        msg.innerText += " 👉 赤マス！300万円 損した…";
+      } else if (tile.type === "yellow") {
+        const newCard = drawRandomCard();
+        if (newCard.id === "bonby") {
+          msg.innerText += " ⚠️ 呪いの【ボンビーカード】を引き当てた！";
+          setTimeout(() => {
+            autoTriggerBonbyCard();
+          }, 800);
+          return;
+        }
+        if (curPlayer.cards.length >= 3) {
+          msg.innerText += " 👉 黄色マス！(カードが満タンで手に入りませんでした)";
+        } else {
+          curPlayer.cards.push(newCard);
+          msg.innerText += ` 👉 黄色マス！【${newCard.name}】を手に入れた！`;
+        }
+      } else if (tile.type === "event") {
+        triggerRandomEvent(curPlayer);
+      } else if (tile.type === "station") {
+        msg.innerText += ` 👉 ${tile.name}に到着！`;
+      } else if (tile.type === "normal") {
+        msg.innerText += ` 👉 ノーマルマスに止まりました。`;
+      }
+      
+      renderBoard();
+    }
+
+    function advanceCalendar() {
+      currentMonth++;
+      if (currentMonth > 12) {
+        currentMonth = 1;
+        currentYear++;
+      }
+
+      document.getElementById("date-display").innerText = `${currentYear}年目 ${currentMonth}月`;
+
+      // ゲーム終了判定
+      if ((gameMode === "3years" && currentYear > 3) || (gameMode === "5years" && currentYear > 5)) {
+        finishGame();
+        return;
+      }
+
+      if ([3, 10].includes(currentMonth)) {
+        execQuarterlyKessan();
+      } else if (currentMonth === 4) {
+        execKessan();
+      } else {
+        renderBoard();
+      }
+    }
+
+    function finishGame() {
+      isGameOver = true;
+      const sorted = [...players].sort((a, b) => b.money - a.money);
+      
+      let html = "👑 【最終結果発表】 👑\n\n";
+      sorted.forEach((p, idx) => {
+        html += `${idx + 1}位: ${p.name} (${p.money}万円)\n`;
+      });
+
+      alert(`🎉 プレイ期間が終了しました！\n\n${html}`);
+      showKessanModal("🏆 最終結果発表 🏆", "全プレイ期間が終了しました！", sorted.map(s => ({ id: s.id, name: s.name, color: s.color, count: 0, income: s.money })));
+      
+      document.getElementById("kessan-close-btn").innerText = "ゲーム終了";
+      updateControlsState();
+      syncGameState();
+    }
+
+    function execQuarterlyKessan() {
+      if (myPlayerId === 'p1') sendData('SHOW_KESSAN', { isQuarterly: true });
+      execQuarterlyKessanLocal();
+    }
+
+    function execQuarterlyKessanLocal() {
+      const results = players.map(p => ({ id: p.id, name: p.name, color: p.color, count: 0, income: 0 }));
+
+      board.forEach(tile => {
+        if (tile.type === "station") {
+          tile.properties.forEach(prop => {
+            if (prop.owner !== null) {
+              const res = results.find(r => r.id === prop.owner);
+              if (res) {
+                res.count++;
+                res.income += Math.floor((prop.price * (prop.rate / 100)) * 0.50);
+              }
+            }
+          });
+        }
+      });
+
+      if (myPlayerId === 'p1') {
+        results.forEach(res => {
+          const p = players.find(player => player.id === res.id);
+          if (p) p.money += res.income;
+        });
+      }
+
+      renderBoard();
+      showKessanModal("📈 中間決算発表 📈", `${currentYear}年目 ${currentMonth}月期（収益の50%を分配）`, results);
+    }
+
+    function execKessan() {
+      if (myPlayerId === 'p1') sendData('SHOW_KESSAN', { isQuarterly: false });
+      execKessanLocal();
+    }
+
+    function execKessanLocal() {
+      const results = players.map(p => ({ id: p.id, name: p.name, color: p.color, count: 0, income: 0 }));
+
+      board.forEach(tile => {
+        if (tile.type === "station") {
+          tile.properties.forEach(prop => {
+            if (prop.owner !== null) {
+              const res = results.find(r => r.id === prop.owner);
+              if (res) {
+                res.count++;
+                res.income += Math.floor(prop.price * (prop.rate / 100));
+              }
+            }
+          });
+        }
+      });
+
+      if (myPlayerId === 'p1') {
+        results.forEach(res => {
+          const p = players.find(player => player.id === res.id);
+          if (p) p.money += res.income;
+        });
+      }
+
+      renderBoard();
+      showKessanModal("🎊 本決算発表 🎊", `${currentYear - 1}年目の年度本決算です！`, results);
+    }
+
+    function showKessanModal(title, subtext, results) {
+      document.getElementById("kessan-title").innerText = title;
+      document.getElementById("kessan-year-text").innerText = subtext;
+
+      const table = document.getElementById("kessan-table");
+      let html = `
+        <tr>
+          <th>項目</th>
+          ${results.map(r => `<th style="color:${r.color}">${r.name}</th>`).join('')}
+        </tr>
+        <tr>
+          <td>${isGameOver ? '総資産/所持金' : '所有物件数'}</td>
+          ${results.map(r => `<td>${isGameOver ? r.income + ' 万円' : r.count + ' 件'}</td>`).join('')}
+        </tr>
+        ${isGameOver ? '' : `
+        <tr>
+          <td>分配金/収益</td>
+          ${results.map(r => `<td>${r.income} 万円</td>`).join('')}
+        </tr>
+        `}
+      `;
+      table.innerHTML = html;
+
+      document.getElementById("kessan-modal").style.display = "flex";
+    }
+
+    function closeKessan() {
+      if (isGameOver) {
+        document.getElementById("kessan-modal").style.display = "none";
+        return;
+      }
+      sendData('CLOSE_KESSAN');
+      closeKessanLocal();
+    }
+
+    function closeKessanLocal() {
+      document.getElementById("kessan-modal").style.display = "none";
+      renderBoard();
+      syncGameState();
+    }
+
+    // --- 分岐選択モーダルのドラッグ移動＆最小化機能 ---
+    const branchModalContent = document.getElementById("branch-modal-content");
+    const branchHeader = document.getElementById("branch-header");
+    let isDraggingBranch = false;
+    let branchOffsetX = 0, branchOffsetY = 0;
+
+    branchHeader.addEventListener("mousedown", (e) => {
+      if (e.target.id === "branch-minimize-btn") return;
+
+      isDraggingBranch = true;
+      branchOffsetX = e.clientX - branchModalContent.offsetLeft;
+      branchOffsetY = e.clientY - branchModalContent.offsetTop;
+      
+      branchModalContent.style.transform = "none";
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (!isDraggingBranch) return;
+      branchModalContent.style.left = `${e.clientX - branchOffsetX}px`;
+      branchModalContent.style.top = `${e.clientY - branchOffsetY}px`;
+    });
+
+    document.addEventListener("mouseup", () => {
+      isDraggingBranch = false;
+    });
+
+    function toggleMinimizeBranch(e) {
+      e.stopPropagation();
+      const btn = document.getElementById("branch-minimize-btn");
+      
+      branchModalContent.classList.toggle("minimized");
+      if (branchModalContent.classList.contains("minimized")) {
+        btn.innerText = "＋";
+      } else {
+        btn.innerText = "ー";
+      }
+    }
+
+    // 初期起動時処理
+    window.onload = () => {
+      updatePlayerConfigs();
+      players = [
+        { ...ALL_PLAYER_TEMPLATES[0], isCpu: false, money: 5000, position: 0, cards: [] },
+        { ...ALL_PLAYER_TEMPLATES[1], isCpu: true, money: 5000, position: 0, cards: [] },
+        { ...ALL_PLAYER_TEMPLATES[2], isCpu: true, money: 5000, position: 0, cards: [] }
+      ];
+      renderBoard();
+    };
+
+    window.onresize = () => {
+      updateCameraPosition();
+    };
+  </script>
+</body>
+</html>
