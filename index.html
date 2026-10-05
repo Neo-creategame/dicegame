@@ -869,10 +869,14 @@
     });
 
     const CARD_TYPES = {
-      EXPRESS: { id: "express", name: "急行カード", diceCount: 2, desc: "サイコロを2個振れる！", weight: 3 },
-      SHINKANSEN: { id: "shinkansen", name: "新幹線カード", diceCount: 3, desc: "サイコロを3個振れる！", weight: 2 },
-      LINEAR: { id: "linear", name: "リニアカード", diceCount: 4, desc: "サイコロを4個振れる！", weight: 1 },
-      BONBY: { id: "bonby", name: "ボンビーカード", diceCount: 1, desc: "【危険】使うと自分に貧乏神が取り憑く！", weight: 94 },
+      EXPRESS: { id: "express", name: "急行カード", diceCount: 2, desc: "サイコロを2個振れる！", weight: 30 },
+      SHINKANSEN: { id: "shinkansen", name: "新幹線カード", diceCount: 3, desc: "サイコロを3個振れる！", weight: 8 },
+      LINEAR: { id: "linear", name: "リニアカード", diceCount: 4, desc: "サイコロを4個振れる！", weight: 2 },
+      FLY: { id: "fly", name: "ぶっとびカード", desc: "全国のどこかのマスへランダムでぶっとぶ！", weight: 10 },
+      TAKEOVER: { id: "takeover", name: "乗っ取りカード", desc: "他プレイヤーの物件を1つ横取りする！", weight: 5 },
+      TOKUSEI: { id: "tokusei", name: "徳政令カード", desc: "全員のマイナス所持金を0円に戻す！", weight: 10 },
+      BONBY: { id: "bonby", name: "ボンビーカード", diceCount: 1, desc: "【危険】使うと自分に貧乏神が取り憑く！", weight: 35 },
+      
     };
 
     function drawRandomCard() {
@@ -1397,6 +1401,16 @@
         await new Promise(resolve => setTimeout(resolve, 800));
 
         const expressCardIndex = curPlayer.cards.findIndex(c => c.id !== "bonby");
+        const takeoverIdx = curPlayer.cards.findIndex(c => c.id === "takeover");
+        const moveCardIdx = curPlayer.cards.findIndex(c => ["express", "shinkansen", "linear", "fly"].includes(c.id));
+
+        if (curPlayer.money < 0 && tokuseiIdx !== -1) {
+          // 借金があるなら優先して徳政令を使用
+          await useCard(tokuseiIdx);
+        } else if (takeoverIdx !== -1 && Math.random() < 0.7) {
+          // 乗っ取りカードがあれば使用
+          await useCard(takeoverIdx);
+        } else if (moveCardIdx !== -1 && Math.random() < 0.5) {
         if (expressCardIndex !== -1 && Math.random() < 0.5) {
           await useCard(expressCardIndex);
         } else {
@@ -1740,7 +1754,74 @@
           document.getElementById("card-btn").style.display = "none";
           document.getElementById("next-btn").style.display = "inline-block";
         }
+      } else if (usedCard.id === "fly") {
+        // ぶっとびカード処理
+        const randomTile = board[Math.floor(Math.random() * board.length)];
+        curPlayer.position = randomTile.id;
+        renderBoard();
+
+        const alertMsg = `🚀 【ぶっとびカード】発動！\n${curPlayer.name} は ${randomTile.name || getTileTypeName(randomTile.type)} へ飛んで行った！`;
+        if (myPlayerId === 'p1') sendData('SHOW_ALERT', { text: alertMsg });
+        alert(alertMsg);
+
+        checkBonbyPass();
+        handleTileEffect(randomTile);
+        showTileInfo(randomTile);
+        syncGameState();
+
+        if (curPlayer.id === myPlayerId && !curPlayer.isCpu) {
+          document.getElementById("dice-btn").style.display = "none";
+          document.getElementById("card-btn").style.display = "none";
+          document.getElementById("next-btn").style.display = "inline-block";
+        }
+      } else if (usedCard.id === "takeover") {
+        // 乗っ取りカード処理
+        let targetProps = [];
+        board.forEach(tile => {
+          if (tile.type === "station") {
+            tile.properties.forEach(p => {
+              if (p.owner !== null && p.owner !== curPlayer.id) {
+                targetProps.push(p);
+              }
+            });
+          }
+        });
+
+        if (targetProps.length > 0) {
+          const stolen = targetProps[Math.floor(Math.random() * targetProps.length)];
+          const prevOwner = players.find(p => p.id === stolen.owner);
+          stolen.owner = curPlayer.id;
+          renderBoard();
+
+          const alertMsg = `🏠 【乗っ取りカード】発動！\n${curPlayer.name} は ${prevOwner ? prevOwner.name : '他社'} から【${stolen.name}】を横取りしました！`;
+          if (myPlayerId === 'p1') sendData('SHOW_ALERT', { text: alertMsg });
+          alert(alertMsg);
+        } else {
+          alert("横取りできる他人の物件がありませんでした…カードだけ消滅しました。");
+        }
+        syncGameState();
+        } else if (usedCard.id === "tokusei") {
+        // 徳政令カード処理
+        let count = 0;
+        players.forEach(p => {
+          if (p.money < 0) {
+            p.money = 0;
+            count++;
+          }
+        });
+        renderBoard();
+
+        const alertMsg = `📜 【徳政令カード】発動！\n借金を抱えていた ${count} 名のプレイヤーの借金が帳消しになりました！`;
+        if (myPlayerId === 'p1') sendData('SHOW_ALERT', { text: alertMsg });
+        alert(alertMsg);
+        syncGameState();
       } else {
+        // 通常のサイコロ移動カード（急行、新幹線、リニア）
+        renderBoard();
+        await rollDiceInternal(usedCard.diceCount);
+      }
+      
+      } else if {
         renderBoard();
         await rollDiceInternal(usedCard.diceCount);
       }
