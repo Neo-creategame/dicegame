@@ -477,7 +477,7 @@
     <div class="left-area">
       <div class="header-group">
         <h1>🎲 桃鉄Web 🎲</h1>
-        <button id="map-toggle-btn" class="map-btn-main" onclick="toggleMapView()">🗺️️ 全体マップを開く</button>
+        <button id="map-toggle-btn" class="map-btn-main" onclick="toggleMapView()">🗺 全体マップを開く</button>
       </div>
 
       <div class="overall-header-bar" id="overall-header">
@@ -869,14 +869,13 @@
     });
 
     const CARD_TYPES = {
-      EXPRESS: { id: "express", name: "急行カード", diceCount: 2, desc: "サイコロを2個振れる！", weight: 30 },
+      EXPRESS: { id: "express", name: "急行カード", diceCount: 2, desc: "サイコロを2個振れる！", weight: 15 },
       SHINKANSEN: { id: "shinkansen", name: "新幹線カード", diceCount: 3, desc: "サイコロを3個振れる！", weight: 8 },
       LINEAR: { id: "linear", name: "リニアカード", diceCount: 4, desc: "サイコロを4個振れる！", weight: 2 },
       FLY: { id: "fly", name: "ぶっとびカード", desc: "全国のどこかのマスへランダムでぶっとぶ！", weight: 10 },
       TAKEOVER: { id: "takeover", name: "乗っ取りカード", desc: "他プレイヤーの物件を1つ横取りする！", weight: 5 },
       TOKUSEI: { id: "tokusei", name: "徳政令カード", desc: "全員のマイナス所持金を0円に戻す！", weight: 10 },
-      BONBY: { id: "bonby", name: "ボンビーカード", diceCount: 1, desc: "【危険】使うと自分に貧乏神が取り憑く！", weight: 35 },
-      
+      BONBY: { id: "bonby", name: "ボンビーカード", diceCount: 1, desc: "【危険】使うと自分に貧乏神が取り憑く！", weight: 50 },
     };
 
     function drawRandomCard() {
@@ -1116,13 +1115,13 @@
           closeKessanLocal();
           break;
           
-          case 'SHOW_ALERT':
-            alert(payload.text);
-            break;
+        case 'SHOW_ALERT':
+          alert(payload.text);
+          break;
 
-          case 'SET_MESSAGE':
-            document.getElementById("message").innerText = payload.text;
-            break;
+        case 'SET_MESSAGE':
+          document.getElementById("message").innerText = payload.text;
+          break;
       }
     }
 
@@ -1400,7 +1399,7 @@
       try {
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        const expressCardIndex = curPlayer.cards.findIndex(c => c.id !== "bonby");
+        const tokuseiIdx = curPlayer.cards.findIndex(c => c.id === "tokusei");
         const takeoverIdx = curPlayer.cards.findIndex(c => c.id === "takeover");
         const moveCardIdx = curPlayer.cards.findIndex(c => ["express", "shinkansen", "linear", "fly"].includes(c.id));
 
@@ -1411,8 +1410,7 @@
           // 乗っ取りカードがあれば使用
           await useCard(takeoverIdx);
         } else if (moveCardIdx !== -1 && Math.random() < 0.5) {
-        if (expressCardIndex !== -1 && Math.random() < 0.5) {
-          await useCard(expressCardIndex);
+          await useCard(moveCardIdx);
         } else {
           await rollDiceInternal();
         }
@@ -1660,22 +1658,24 @@
         }
       });
 
+      let alertText = "";
+
       if (rand < 0.4) {
         const loss = (Math.floor(Math.random() * 5) + 2) * 100;
         victim.money -= loss;
-        alert(`👹 貧乏神「ほい〜！ ${victim.name} のおサイフから ${loss}万円 ポイしておいたのねん！」`);
+        alertText = `👹 貧乏神「ほい〜！ ${victim.name} のおサイフから ${loss}万円 ポイしておいたのねん！」`;
       } else if (rand < 0.7 && victim.cards.length > 0) {
         const lostCardIndex = Math.floor(Math.random() * victim.cards.length);
         const lostCard = victim.cards.splice(lostCardIndex, 1)[0];
-        alert(`👹 貧乏神「【${lostCard.name}】なんて要らないのねん！ ビリビリ〜！」`);
+        alertText = `👹 貧乏神「【${lostCard.name}】なんて要らないのねん！ ビリビリ〜！」`;
       } else if (ownedProperties.length > 0) {
         const lostProp = ownedProperties[Math.floor(Math.random() * ownedProperties.length)];
         lostProp.owner = null;
-        alert(`👹 貧乏神「${victim.name} が持ってる【${lostProp.name}】を勝手に売ってきたのねん！」`);
+        alertText = `👹 貧乏神「${victim.name} が持ってる【${lostProp.name}】を勝手に売ってきたのねん！」`;
       } else {
         const loss = 300;
         victim.money -= loss;
-        alert(`👹 貧乏神「ヒマだから ${victim.name} から ${loss}万円 もらっておくのねん！」`);
+        alertText = `👹 貧乏神「ヒマだから ${victim.name} から ${loss}万円 もらっておくのねん！」`;
       }
 
       if (myPlayerId === 'p1') {
@@ -1800,7 +1800,7 @@
           alert("横取りできる他人の物件がありませんでした…カードだけ消滅しました。");
         }
         syncGameState();
-        } else if (usedCard.id === "tokusei") {
+      } else if (usedCard.id === "tokusei") {
         // 徳政令カード処理
         let count = 0;
         players.forEach(p => {
@@ -1817,11 +1817,6 @@
         syncGameState();
       } else {
         // 通常のサイコロ移動カード（急行、新幹線、リニア）
-        renderBoard();
-        await rollDiceInternal(usedCard.diceCount);
-      }
-      
-      } else if {
         renderBoard();
         await rollDiceInternal(usedCard.diceCount);
       }
@@ -1862,6 +1857,8 @@
           sendData('SHOW_ALERT', { text: goalMsg });
           setNextDestination();
         }
+        alert(goalMsg);
+
         renderBoard();
       }
     }
