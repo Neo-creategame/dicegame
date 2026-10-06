@@ -880,6 +880,7 @@
       FLY: { id: "fly", name: "ぶっとびカード", desc: "全国のどこかのマスへランダムでぶっとぶ！", weight: 10 },
       TAKEOVER: { id: "takeover", name: "乗っ取りカード", desc: "他プレイヤーの物件を1つ横取りする！", weight: 5 },
       TOKUSEI: { id: "tokusei", name: "徳政令カード", desc: "全員のマイナス所持金を0円に戻す！", weight: 10 },
+      OHARAI: { id: "oharai", name: "おはらいカード", desc: "自分に取り憑いている貧乏神を消し去る！", weight: 10 },
       BONBY: { id: "bonby", name: "ボンビーカード", diceCount: 1, desc: "【危険】使うと自分に貧乏神が取り憑く！", weight: 50 },
     };
 
@@ -1408,7 +1409,10 @@
         const takeoverIdx = curPlayer.cards.findIndex(c => c.id === "takeover");
         const moveCardIdx = curPlayer.cards.findIndex(c => ["express", "shinkansen", "linear", "fly"].includes(c.id));
 
-        if (curPlayer.money < 0 && tokuseiIdx !== -1) {
+      if (bonbyOwner === curPlayer.id && oharaiIdx !== -1) {
+          // 🌟 貧乏神が憑いていておはらいカードを持っているなら最優先で使う
+          await useCard(oharaiIdx);
+        } else if (curPlayer.money < 0 && tokuseiIdx !== -1) {
           // 借金があるなら優先して徳政令を使用
           await useCard(tokuseiIdx);
         } else if (takeoverIdx !== -1 && Math.random() < 0.7) {
@@ -1820,6 +1824,19 @@
         if (myPlayerId === 'p1') sendData('SHOW_ALERT', { text: alertMsg });
         alert(alertMsg);
         syncGameState();
+      } else if (usedCard.id === "oharai") {
+        // 🌟 おはらいカード処理を追加！
+        if (bonbyOwner === curPlayer.id) {
+          bonbyOwner = null; // 自分に憑いている貧乏神を消去
+          renderBoard();
+          const alertMsg = `⛩️ 【おはらいカード】発動！\n${curPlayer.name} に取り憑いていた貧乏神は消え去りました！`;
+          if (myPlayerId === 'p1') sendData('SHOW_ALERT', { text: alertMsg });
+          alert(alertMsg);
+      } else {
+          // 貧乏神が憑いていないのに使った場合
+          alert("貧乏神が取り憑いていなかったため、何も起こりませんでした…（カードは消費されました）");
+        }
+        syncGameState();
       } else {
         // 通常のサイコロ移動カード（急行、新幹線、リニア）
         renderBoard();
@@ -1854,7 +1871,12 @@
         const prizeMoney = 5000;
         curPlayer.money += prizeMoney;
         
-        // bonbyOwner = null;
+        let bonbyMsg = "";
+        // 🌟 ゴールしたプレイヤーがボンビーを連れている場合のみ消去する
+        if (bonbyOwner === curPlayer.id) {
+          bonbyOwner = null;
+          bonbyMsg = "\n👹 貧乏神は姿を消しました！";
+        }
 
         const goalMsg = `🎊 祝！ ${curPlayer.name} が ${tile.name} に一番乗りで到着しました！\n💰 到着賞金として 【${prizeMoney}万円】 を獲得`;//！\n👹 貧乏神は姿を消しました！
         
