@@ -1408,6 +1408,7 @@
         const tokuseiIdx = curPlayer.cards.findIndex(c => c.id === "tokusei");
         const takeoverIdx = curPlayer.cards.findIndex(c => c.id === "takeover");
         const moveCardIdx = curPlayer.cards.findIndex(c => ["express", "shinkansen", "linear", "fly"].includes(c.id));
+        const oharaiIdx = curPlayer.cards.findIndex(c => c.id === "oharai");
 
       if (bonbyOwner === curPlayer.id && oharaiIdx !== -1) {
           // 🌟 貧乏神が憑いていておはらいカードを持っているなら最優先で使う
@@ -1452,6 +1453,8 @@
       document.getElementById("dice-btn").disabled = true;
       document.getElementById("card-btn").disabled = true;
 
+      try{
+
       const diceResults = [];
       for (let d = 0; d < diceCount; d++) {
         diceResults.push(Math.floor(Math.random() * 6) + 1);
@@ -1459,7 +1462,10 @@
 
       sendData('ACTION_ROLL_DICE', { diceCount, diceResults });
       await executeDiceRoll(diceCount, diceResults);
+    } catch(e) {
+      console.error(e);
     }
+  }
 
     // 最短距離（マス数）を計算する関数 (幅優先探索: BFS)
     function getDistanceToDestination(startTileId, targetTileId) {
@@ -1979,7 +1985,7 @@
       document.getElementById("date-display").innerText = `${currentYear}年目 ${currentMonth}月`;
 
       // ゲーム終了判定
-      if ((gameMode === "3years" && currentYear > 3 && curentMonth > 3) || (gameMode === "5years" && currentYear > 5 && currentMonth > 3)) {
+      if ((gameMode === "3years" && currentYear > 3 && currentMonth > 3) || (gameMode === "5years" && currentYear > 5 && currentMonth > 3)) {
         finishGame();
         return;
       }
