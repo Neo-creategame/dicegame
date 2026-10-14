@@ -398,9 +398,74 @@
       from { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
       to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
     }
+    /* --- 🎲 3Dサイコロモーダル＆アニメーション --- */
+    #dice-3d-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+      flex-direction: column;
+    }
+
+    .dice-container {
+      width: 100px;
+      height: 100px;
+      perspective: 600px;
+      margin: 20px;
+    }
+
+    .cube {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 1.2s cubic-bezier(0.1, 0.8, 0.3, 1);
+    }
+
+    .cube-face {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      background: white;
+      border: 3px solid #333;
+      border-radius: 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 36px;
+      font-weight: bold;
+      color: #333;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.1);
+    }
+
+    /* サイコロの各面の配置 */
+    .face-1 { transform: rotateY(0deg) translateZ(50px); color: #e53935; font-size: 48px; } /* 1の目は赤く大きく */
+    .face-2 { transform: rotateY(90deg) translateZ(50px); }
+    .face-3 { transform: rotateX(-90deg) translateZ(50px); }
+    .face-4 { transform: rotateX(90deg) translateZ(50px); }
+    .face-5 { transform: rotateY(-90deg) translateZ(50px); }
+    .face-6 { transform: rotateY(180deg) translateZ(50px); }
+
+    .dice-wrapper {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
+
+  <!-- 🎲 3Dサイコロ演出用モーダル -->
+  <div id="dice-3d-modal">
+    <div id="dice-wrapper" class="dice-wrapper"></div>
+    <div id="dice-3d-text" style="color: white; font-size: 24px; font-weight: bold; margin-top: 20px; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">
+      サイコロを振っています…
+    </div>
+  </div>
 
   <!-- オンライン/CPU設定用ロビー画面 -->
   <div id="lobby-modal">
@@ -874,15 +939,30 @@
     });
 
     const CARD_TYPES = {
-      EXPRESS: { id: "express", name: "急行カード", diceCount: 2, desc: "サイコロを2個振れる！", weight: 30 },//30
-      SHINKANSEN: { id: "shinkansen", name: "新幹線カード", diceCount: 3, desc: "サイコロを3個振れる！", weight: 8 },//8
-      LINEAR: { id: "linear", name: "リニアカード", diceCount: 4, desc: "サイコロを4個振れる！", weight: 2 },//2
-      FLY: { id: "fly", name: "ぶっとびカード", desc: "全国のどこかのマスへランダムでぶっとぶ！", weight: 10 },//10
-      TAKEOVER: { id: "takeover", name: "乗っ取りカード", desc: "他プレイヤーの物件を1つ横取りする！", weight: 15 },//5
-      TOKUSEI: { id: "tokusei", name: "徳政令カード", desc: "全員のマイナス所持金を0円に戻す！", weight: 10 },//10
-      OHARAI: { id: "oharai", name: "おはらいカード", desc: "自分に取り憑いている貧乏神を消し去る！", weight: 5 },//5
-      BONBY: { id: "bonby", name: "ボンビーカード", diceCount: 1, desc: "【危険】使うと自分に貧乏神が取り憑く！", weight: 30 },//30
+      EXPRESS: { id: "express", name: "急行カード", diceCount: 2, desc: "サイコロを2個振れる！", weight: 30 },
+      SHINKANSEN: { id: "shinkansen", name: "新幹線カード", diceCount: 3, desc: "サイコロを3個振れる！", weight: 8 },
+      LINEAR: { id: "linear", name: "リニアカード", diceCount: 4, desc: "サイコロを4個振れる！", weight: 2 },
+      FLY: { id: "fly", name: "ぶっとびカード", desc: "全国のどこかのマスへランダムでぶっとぶ！", weight: 10 },
+      TAKEOVER: { id: "takeover", name: "乗っ取りカード", desc: "他プレイヤーの物件を1つ横取りする！", weight: 5 },
+      TOKUSEI: { id: "tokusei", name: "徳政令カード", desc: "全員のマイナス所持金を0円に戻す！", weight: 10 },
+      OHARAI: { id: "oharai", name: "おはらいカード", desc: "自分に取り憑いている貧乏神を消し去る！", weight: 5 },
+      BONBY: { id: "bonby", name: "ボンビーカード", diceCount: 1, desc: "【危険】使うと自分に貧乏神が取り憑く！", weight: 30 },
     };
+
+    function getRandomByWeight(items) {
+      const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+      let randomNum = Math.floor(Math.random() * totalWeight);
+
+      for (const item of items) {
+        if (randomNum < item.weight) return item;
+        randomNum -= item.weight;
+      }
+      return items[0];
+    }
+
+    function getInflationMultiplier() {
+      return 1 + (currentYear - 1) * 0.5;
+    }
 
     function drawRandomCard() {
       const cards = Object.values(CARD_TYPES);
@@ -925,9 +1005,7 @@
       cpuLevel = document.getElementById("cpu-level-select").value;
       gameMode = document.getElementById("game-mode-select").value;
 
-      // 3年決戦のみ初期資金5000万円
       const startMoney = (gameMode === "3years") ? 5000 : 1500;
-
       const types = ["human", p2Type, p3Type, p4Type].filter(t => t !== "none");
 
       if (types.length < 2) {
@@ -935,13 +1013,11 @@
         return;
       }
 
+      // テンプレート安全割当
+      const assignedTemplates = ["p1", "p2", p3Type !== "none" ? "p3" : "p4", "p4"];
       players = types.map((type, idx) => {
-        const template = ALL_PLAYER_TEMPLATES.find((t, tIdx) => {
-          if (idx === 0) return t.id === "p1";
-          if (idx === 1) return t.id === "p2";
-          if (idx === 2) return t.id === (p3Type !== "none" ? "p3" : "p4");
-          return t.id === "p4";
-        }) || ALL_PLAYER_TEMPLATES[idx];
+        const targetId = assignedTemplates[idx] || ALL_PLAYER_TEMPLATES[idx].id;
+        const template = ALL_PLAYER_TEMPLATES.find(t => t.id === targetId) || ALL_PLAYER_TEMPLATES[idx];
 
         return {
           ...template,
@@ -967,17 +1043,27 @@
 
         peer.on('connection', (conn) => {
           connections.push(conn);
-          conn.on('open', () => {
+
+          const handleConnect = () => {
             const assignedIdx = connections.length;
-            const assignedPlayer = players[assignedIdx];
+            const assignedPlayer = players[assignedIdx] || players[1];
 
             conn.send({ type: 'ASSIGN_ROLE', payload: { playerId: assignedPlayer.id } });
             
             document.getElementById("lobby-modal").style.display = "none";
             initHostGame();
-          });
+          };
+
+          if (conn.open) {
+            handleConnect();
+          } else {
+            conn.on('open', handleConnect);
+          }
 
           conn.on('data', (data) => handleRemoteData(data));
+          conn.on('close', () => {
+            console.log("ゲストが切断しました");
+          });
         });
       } else {
         myPlayerId = 'p1';
@@ -1094,7 +1180,13 @@
           break;
 
         case 'ACTION_ROLL_DICE':
-          executeDiceRoll(payload.diceCount, payload.diceResults);
+          (async () => {
+            const rollingPlayer = players.find(p => p.id === payload.playerId) || getCurrentPlayer();
+    // 全員画面で3Dアニメーションを表示
+            await show3DDiceAnimation(rollingPlayer.name, payload.diceCount, payload.diceResults);
+    // アニメーション完了後にコマの動く処理を実行
+            executeDiceRoll(payload.diceCount, payload.diceResults);
+          })();
           break;
 
         case 'BRANCH_CHOSEN':
@@ -1400,7 +1492,7 @@
       const curPlayer = getCurrentPlayer();
       if (!curPlayer || !curPlayer.isCpu || isCpuProcessing) return;
 
-      isCpuProcessing = true; // ロック設定
+      isCpuProcessing = true;
 
       try {
         await new Promise(resolve => setTimeout(resolve, 800));
@@ -1410,14 +1502,11 @@
         const moveCardIdx = curPlayer.cards.findIndex(c => ["express", "shinkansen", "linear", "fly"].includes(c.id));
         const oharaiIdx = curPlayer.cards.findIndex(c => c.id === "oharai");
 
-      if (bonbyOwner === curPlayer.id && oharaiIdx !== -1) {
-          // 🌟 貧乏神が憑いていておはらいカードを持っているなら最優先で使う
+        if (bonbyOwner === curPlayer.id && oharaiIdx !== -1) {
           await useCard(oharaiIdx);
         } else if (curPlayer.money < 0 && tokuseiIdx !== -1) {
-          // 借金があるなら優先して徳政令を使用
           await useCard(tokuseiIdx);
         } else if (takeoverIdx !== -1 && Math.random() < 0.7) {
-          // 乗っ取りカードがあれば使用
           await useCard(takeoverIdx);
         } else if (moveCardIdx !== -1 && Math.random() < 0.5) {
           await useCard(moveCardIdx);
@@ -1440,7 +1529,7 @@
       } catch (err) {
         console.error("CPUターン中にエラーが発生しました:", err);
       } finally {
-        isCpuProcessing = false; // 確実にロック解除
+        isCpuProcessing = false;
       }
     }
 
@@ -1449,25 +1538,100 @@
       await rollDiceInternal(diceCount);
     }
 
+    const CUBE_ROTATIONS = {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: -90 },
+      3: { x: 90, y: 0 },
+      4: { x: -90, y: 0 },
+      5: { x: 0, y: 90 },
+      6: { x: 0, y: 180 }
+    };
+    // --- 共通3Dサイコロ演出関数 ---
+    async function show3DDiceAnimation(playerName, diceCount, diceResults) {
+      const modal = document.getElementById("dice-3d-modal");
+      const wrapper = document.getElementById("dice-wrapper");
+      const textEl = document.getElementById("dice-3d-text");
+
+      wrapper.innerHTML = "";
+      textEl.innerText = `${playerName} がサイコロを振っています…`;
+      modal.style.display = "flex";
+
+      const cubeElements = [];
+      for (let i = 0; i < diceCount; i++) {
+        const container = document.createElement("div");
+        container.className = "dice-container";
+
+        const cube = document.createElement("div");
+        cube.className = "cube";
+        cube.innerHTML = `
+          <div class="cube-face face-1">●</div>
+          <div class="cube-face face-2">●<br>●</div>
+          <div class="cube-face face-3">●&nbsp;&nbsp;<br>&nbsp;●&nbsp;<br>&nbsp;&nbsp;●</div>
+          <div class="cube-face face-4">●&nbsp;●<br>●&nbsp;●</div>
+          <div class="cube-face face-5">●&nbsp;●<br>&nbsp;●&nbsp;<br>●&nbsp;●</div>
+          <div class="cube-face face-6">●&nbsp;●<br>●&nbsp;●<br>●&nbsp;●</div>
+        `;
+        container.appendChild(cube);
+        wrapper.appendChild(container);
+        cubeElements.push(cube);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      cubeElements.forEach((cube, idx) => {
+      const result = diceResults[idx];
+      const baseRot = CUBE_ROTATIONS[result];
+
+      const extraRotX = (Math.floor(Math.random() * 3) + 3) * 360;
+      const extraRotY = (Math.floor(Math.random() * 3) + 3) * 360;
+
+      const targetX = baseRot.x + extraRotX;
+      const targetY = baseRot.y + extraRotY;
+
+      cube.style.transform = `rotateX(${targetX}deg) rotateY(${targetY}deg)`;
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 1300));
+
+    const total = diceResults.reduce((a, b) => a + b, 0);
+    const resultText = (diceCount > 1) 
+      ? `🎲 [ ${diceResults.join(" + ")} ] = ${total} が出ました！` 
+      : `🎲 ${total} が出ました！`;
+
+    textEl.innerText = resultText;
+
+    await new Promise(resolve => setTimeout(resolve, 800));
+    modal.style.display = "none";
+  }
+
     async function rollDiceInternal(diceCount = 1) {
       document.getElementById("dice-btn").disabled = true;
       document.getElementById("card-btn").disabled = true;
 
-      try{
+      try {
+        const curPlayer = getCurrentPlayer();
 
-      const diceResults = [];
-      for (let d = 0; d < diceCount; d++) {
-        diceResults.push(Math.floor(Math.random() * 6) + 1);
+    // 1. 先に出目を決定
+        const diceResults = [];
+        for (let d = 0; d < diceCount; d++) {
+          diceResults.push(Math.floor(Math.random() * 6) + 1);
+        }
+
+    // 2. 他プレイヤーへサイコロ開始情報と出数を送信
+        sendData('ACTION_ROLL_DICE', { diceCount, diceResults, playerId: curPlayer.id });
+
+    // 3. ローカル（自分の画面）で3D演出を実行
+        await show3DDiceAnimation(curPlayer.name, diceCount, diceResults);
+
+    // 4. 駒の移動処理を実行
+        await executeDiceRoll(diceCount, diceResults);
+
+      } catch(e) {
+        console.error(e);
+        document.getElementById("dice-3d-modal").style.display = "none";
       }
-
-      sendData('ACTION_ROLL_DICE', { diceCount, diceResults });
-      await executeDiceRoll(diceCount, diceResults);
-    } catch(e) {
-      console.error(e);
     }
-  }
 
-    // 最短距離（マス数）を計算する関数 (幅優先探索: BFS)
     function getDistanceToDestination(startTileId, targetTileId) {
       if (startTileId === targetTileId) return 0;
 
@@ -1511,7 +1675,6 @@
 
         if (availableNext.length > 1) {
           if (curPlayer.isCpu && myPlayerId === 'p1') {
-            // 最短ルートのマスを取得
             let bestNextId = availableNext[0];
             let minDistance = 999;
 
@@ -1523,7 +1686,6 @@
               }
             }
 
-            // 難易度に応じた最短ルート選択確率の判定
             let chooseBestRate = 1.0;
             if (cpuLevel === "easy") chooseBestRate = 0.4;
             if (cpuLevel === "normal") chooseBestRate = 0.75;
@@ -1558,7 +1720,6 @@
       handleTileEffect(endTile);
       showTileInfo(endTile);
 
-      // 貧乏神の1/2発動チェック
       if (myPlayerId === 'p1' && bonbyOwner === curPlayer.id) {
         if (Math.random() < 0.5) {
           await new Promise(resolve => setTimeout(resolve, 600));
@@ -1586,7 +1747,7 @@
 
     function nextTurnLocal() {
       canBuyProperties = false;
-      isCpuProcessing = false; // CPUロック初期化
+      isCpuProcessing = false;
 
       document.getElementById("next-btn").style.display = "none";
       document.getElementById("dice-btn").style.display = "inline-block";
@@ -1770,7 +1931,6 @@
           document.getElementById("next-btn").style.display = "inline-block";
         }
       } else if (usedCard.id === "fly") {
-        // ぶっとびカード処理
         const randomTile = board[Math.floor(Math.random() * board.length)];
         curPlayer.position = randomTile.id;
         renderBoard();
@@ -1790,7 +1950,6 @@
           document.getElementById("next-btn").style.display = "inline-block";
         }
       } else if (usedCard.id === "takeover") {
-        // 乗っ取りカード処理
         let targetProps = [];
         board.forEach(tile => {
           if (tile.type === "station") {
@@ -1816,7 +1975,6 @@
         }
         syncGameState();
       } else if (usedCard.id === "tokusei") {
-        // 徳政令カード処理
         let count = 0;
         players.forEach(p => {
           if (p.money < 0) {
@@ -1831,20 +1989,17 @@
         alert(alertMsg);
         syncGameState();
       } else if (usedCard.id === "oharai") {
-        // 🌟 おはらいカード処理を追加！
         if (bonbyOwner === curPlayer.id) {
-          bonbyOwner = null; // 自分に憑いている貧乏神を消去
+          bonbyOwner = null;
           renderBoard();
           const alertMsg = `⛩️ 【おはらいカード】発動！\n${curPlayer.name} に取り憑いていた貧乏神は消え去りました！`;
           if (myPlayerId === 'p1') sendData('SHOW_ALERT', { text: alertMsg });
           alert(alertMsg);
-      } else {
-          // 貧乏神が憑いていないのに使った場合
+        } else {
           alert("貧乏神が取り憑いていなかったため、何も起こりませんでした…（カードは消費されました）");
         }
         syncGameState();
       } else {
-        // 通常のサイコロ移動カード（急行、新幹線、リニア）
         renderBoard();
         await rollDiceInternal(usedCard.diceCount);
       }
@@ -1852,7 +2007,7 @@
 
     function switchTurn() {
       if (isGameOver) return;
-
+      isCpuProcessing = false;
       currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
 
       if (currentPlayerIndex === 0) {
@@ -1874,17 +2029,17 @@
     function checkDestinationGoal(tile) {
       const curPlayer = getCurrentPlayer();
       if (tile && tile.id === destinationId) {
-        const prizeMoney = 5000;
+        const prizeMoney = Math.max(100, Math.round((5000 * getInflationMultiplier()) / 100) * 100);
+        
         curPlayer.money += prizeMoney;
         
         let bonbyMsg = "";
-        // 🌟 ゴールしたプレイヤーがボンビーを連れている場合のみ消去する
         if (bonbyOwner === curPlayer.id) {
           bonbyOwner = null;
           bonbyMsg = "\n👹 貧乏神は姿を消しました！";
         }
 
-        const goalMsg = `🎊 祝！ ${curPlayer.name} が ${tile.name} に一番乗りで到着しました！\n💰 到着賞金として 【${prizeMoney}万円】 を獲得`;//！\n👹 貧乏神は姿を消しました！
+        const goalMsg = `🎊 祝！ ${curPlayer.name} が ${tile.name} に一番乗りで到着しました！\n💰 到着賞金として 【${prizeMoney}万円】 を獲得${bonbyMsg}`;
         
         if (myPlayerId === 'p1') {
           sendData('SHOW_ALERT', { text: goalMsg });
@@ -1901,15 +2056,25 @@
         { 
           name: "宝くじ当選！", 
           effect: () => { 
-            player.money += 1000; 
+            const prize = Math.round(1000 * getInflationMultiplier());
+            player.money += prize; 
             alert(`🎉 ${player.name} は宝くじで1000万円当たった！`); 
           } 
         },
         { 
           name: "スリ被害…", 
           effect: () => { 
-            player.money = Math.max(0, player.money - 500); 
-            alert(`💸 ${player.name} は500万円スられた！`); 
+            const baseLossTable = [
+              { amount: 300, weight: 50 },
+              { amount: 500, weight: 34 },
+              { amount: 1000, weight: 13 },
+              { amount: 100000, weight: 3  }
+            ];
+            const baseAmount = getRandomByWeight(baseLossTable).amount;
+            const loss = Math.max(100, Math.round((baseAmount * getInflationMultiplier()) / 100) * 100);
+            
+            player.money = Math.max(100, player.money - loss); 
+            alert(`💸 ${player.name} は${loss}万円スられた！`); 
           } 
         },
         { 
@@ -1945,8 +2110,17 @@
         curPlayer.money += 500;
         msg.innerText += " 👉 青マス！500万円 GET！";
       } else if (tile.type === "red") {
-        curPlayer.money -= 300;
-        msg.innerText += " 👉 赤マス！300万円 損した…";
+        const baseRedLossTable = [
+          { amount: 100, weight: 45 },
+          { amount: 200, weight: 35 },
+          { amount: 400, weight: 15 },
+          { amount: 800, weight: 5  }
+        ];
+
+        const baseAmount = getRandomByWeight(baseRedLossTable).amount;
+        const redLoss = Math.max(100, Math.round((baseAmount * getInflationMultiplier()) / 100) * 100);
+        curPlayer.money -= redLoss;
+        msg.innerText += ` 👉 赤マス！${redLoss}万円 損した…`;
       } else if (tile.type === "yellow") {
         const newCard = drawRandomCard();
         if (newCard.id === "bonby") {
@@ -1984,7 +2158,6 @@
 
       document.getElementById("date-display").innerText = `${currentYear}年目 ${currentMonth}月`;
 
-      // ゲーム終了判定
       if ((gameMode === "3years" && currentYear > 3 && currentMonth > 3) || (gameMode === "5years" && currentYear > 5 && currentMonth > 3)) {
         finishGame();
         return;
@@ -2161,7 +2334,6 @@
       }
     }
 
-    // 初期起動時処理
     window.onload = () => {
       updatePlayerConfigs();
       players = [
