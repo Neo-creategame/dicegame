@@ -1220,6 +1220,10 @@
         case 'SET_MESSAGE':
           document.getElementById("message").innerText = payload.text;
           break;
+
+        case 'USE_CARD':
+          useCardLocal(payload.playerId, payload.cardIndex);
+          break;
       }
     }
 
@@ -1911,28 +1915,37 @@
     function closeCardModal() {
       document.getElementById("card-modal").style.display = "none";
     }
-
     async function useCard(cardIndex) {
-      const curPlayer = getCurrentPlayer();
-      if (curPlayer.cards.length <= cardIndex) return;
-
-      const usedCard = curPlayer.cards.splice(cardIndex, 1)[0];
+      const curplayer = getCurrentPlayer();
+      if (curPlayer.cards.lenght <= cardIndex) return;
       closeCardModal();
+      if (myPlayerId !== 'p1') {
+        sendData('USE_CARD', { playerId: myPlayerId, cardIndex });
+      } else {
+        await useCardLocal(myPlayerId, cardIndex);
+      }
+    }
+    async function useCardLocal(cardIndex) {
+      const targetPlayer = players.find(p => p.id === playerId) || getCurrentPlayer();
+      if (targetPlayer.cards.length <= cardIndex) return;
+
+      const usedCard = targetPlayer.cards.splice(cardIndex, 1)[0];
+      
         
       if (usedCard.id === "bonby") {
-        bonbyOwner = curPlayer.id;
+        bonbyOwner = targetPlayer.id;
         renderBoard();
-        alert(`👹 ボンビーカードの効果！ ${curPlayer.name} に貧乏神が取り憑いた！`);
+        alert(`👹 ボンビーカードの効果！ ${targetPlayer.name} に貧乏神が取り憑いた！`);
         renderBoard();
         
-        if (curPlayer.id === myPlayerId && !curPlayer.isCpu) {
+        if (targetPlayer.id === myPlayerId && !targetPlayer.isCpu) {
           document.getElementById("dice-btn").style.display = "none";
           document.getElementById("card-btn").style.display = "none";
           document.getElementById("next-btn").style.display = "inline-block";
         }
       } else if (usedCard.id === "fly") {
         const randomTile = board[Math.floor(Math.random() * board.length)];
-        curPlayer.position = randomTile.id;
+        targetPlayer.position = randomTile.id;
         renderBoard();
 
         const alertMsg = `🚀 【ぶっとびカード】発動！\n${curPlayer.name} は ${randomTile.name || getTileTypeName(randomTile.type)} へ飛んで行った！`;
@@ -1944,7 +1957,7 @@
         showTileInfo(randomTile);
         syncGameState();
 
-        if (curPlayer.id === myPlayerId && !curPlayer.isCpu) {
+        if (targetPlayer.id === myPlayerId && !targetPlayer.isCpu) {
           document.getElementById("dice-btn").style.display = "none";
           document.getElementById("card-btn").style.display = "none";
           document.getElementById("next-btn").style.display = "inline-block";
@@ -1954,7 +1967,7 @@
         board.forEach(tile => {
           if (tile.type === "station") {
             tile.properties.forEach(p => {
-              if (p.owner !== null && p.owner !== curPlayer.id) {
+              if (p.owner !== null && p.owner !== targetPlayer.id) {
                 targetProps.push(p);
               }
             });
@@ -1964,7 +1977,7 @@
         if (targetProps.length > 0) {
           const stolen = targetProps[Math.floor(Math.random() * targetProps.length)];
           const prevOwner = players.find(p => p.id === stolen.owner);
-          stolen.owner = curPlayer.id;
+          stolen.owner = targetPlayer.id;
           renderBoard();
 
           const alertMsg = `🏠 【乗っ取りカード】発動！\n${curPlayer.name} は ${prevOwner ? prevOwner.name : '他社'} から【${stolen.name}】を横取りしました！`;
@@ -1989,10 +2002,10 @@
         alert(alertMsg);
         syncGameState();
       } else if (usedCard.id === "oharai") {
-        if (bonbyOwner === curPlayer.id) {
+        if (bonbyOwner === taregtPlayer.id) {
           bonbyOwner = null;
           renderBoard();
-          const alertMsg = `⛩️ 【おはらいカード】発動！\n${curPlayer.name} に取り憑いていた貧乏神は消え去りました！`;
+          const alertMsg = `⛩️ 【おはらいカード】発動！\n${targetPlayer.name} に取り憑いていた貧乏神は消え去りました！`;
           if (myPlayerId === 'p1') sendData('SHOW_ALERT', { text: alertMsg });
           alert(alertMsg);
         } else {
