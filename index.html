@@ -1915,9 +1915,9 @@
     function closeCardModal() {
       document.getElementById("card-modal").style.display = "none";
     }
-    async function useCard(cardIndex) {
-      const curplayer = getCurrentPlayer();
-      if (curPlayer.cards.lenght <= cardIndex) return;
+    async function useCard(cardIndex, playerId) {
+      const curPlayer = getCurrentPlayer();
+      if (curPlayer.cards.length <= cardIndex) return;
       closeCardModal();
       if (myPlayerId !== 'p1') {
         sendData('USE_CARD', { playerId: myPlayerId, cardIndex });
@@ -2002,7 +2002,7 @@
         alert(alertMsg);
         syncGameState();
       } else if (usedCard.id === "oharai") {
-        if (bonbyOwner === taregtPlayer.id) {
+        if (bonbyOwner === targetPlayer.id) {
           bonbyOwner = null;
           renderBoard();
           const alertMsg = `⛩️ 【おはらいカード】発動！\n${targetPlayer.name} に取り憑いていた貧乏神は消え去りました！`;
