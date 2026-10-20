@@ -105,6 +105,7 @@ async function rollDiceInternal(diceCount = 1) {
 }
 
 // --- コマの移動ロジック＆アニメーション ---
+// --- コマの移動ロジック＆アニメーション ---
 async function executeDiceRoll(diceCount, diceResults) {
   canBuyProperties = false;
   if (typeof isOverallMapView !== 'undefined' && isOverallMapView) toggleMapView();
@@ -116,6 +117,7 @@ async function executeDiceRoll(diceCount, diceResults) {
   const msgEl = document.getElementById("message");
   if (msgEl) msgEl.innerText = `${curPlayer.name} は ${diceText} が出ました！`;
 
+  // 1. 出目の数だけ1マスずつコマを進める
   for (let i = 0; i < totalDiceValue; i++) {
     await new Promise(resolve => setTimeout(resolve, 200));
     
@@ -167,6 +169,7 @@ async function executeDiceRoll(diceCount, diceResults) {
     if (typeof renderBoard === 'function') renderBoard();
   }
 
+  // 2. 移動完了後の共通処理
   const endTile = board.find(t => t.id === curPlayer.position);
   canBuyProperties = true;
 
@@ -174,6 +177,7 @@ async function executeDiceRoll(diceCount, diceResults) {
   if (typeof handleTileEffect === 'function') handleTileEffect(endTile);
   if (typeof showTileInfo === 'function') showTileInfo(endTile);
 
+  // 貧乏神の悪行判定
   if (myPlayerId === 'p1' && typeof bonbyOwner !== 'undefined' && bonbyOwner === curPlayer.id) {
     if (Math.random() < 0.5 && typeof handleBonbyAction === 'function') {
       await new Promise(resolve => setTimeout(resolve, 600));
@@ -181,7 +185,7 @@ async function executeDiceRoll(diceCount, diceResults) {
     }
   }
 
-  // --- 変数定義の修正箇所 ---
+  // 3. 🎯 ボタン表示の制御（どのマスに止まっても確実に実行する）
   const diceBtn = document.getElementById("dice-btn");
   const cardBtn = document.getElementById("card-btn");
   const nextBtn = document.getElementById("next-btn");
@@ -189,16 +193,15 @@ async function executeDiceRoll(diceCount, diceResults) {
   if (diceBtn) diceBtn.style.display = "none";
   if (cardBtn) cardBtn.style.display = "none";
 
-  // ローカル対戦（通信接続がない）かどうかの判定を追加
   const isLocalGame = (typeof connections === 'undefined' || connections.length === 0);
 
+  // 人間プレイヤーのターンの場合は、止まったマスの種類に関わらず「次へ」ボタンを表示する
   if ((isLocalGame || curPlayer.id === myPlayerId) && !curPlayer.isCpu && !isGameOver && nextBtn) {
     nextBtn.style.display = "inline-block";
   }
 
   if (typeof syncGameState === 'function') syncGameState();
 }
-
 // --- 分岐選択モーダルの表示とユーザー入力待ち ---
 function promptBranchChoice(nextTileIds) {
   return new Promise(resolve => {
