@@ -177,6 +177,10 @@ async function executeDiceRoll(diceCount, diceResults) {
     }
   }
 
+  const diceBtn = document.getElementById("dice-btn");
+  const cardBtn = document.getElementById("card-btn");
+  const nextBtn = document.getElementById("next-btn");
+  
   if (diceBtn) diceBtn.style.display = "none";
   if (cardBtn) cardBtn.style.display = "none";
 
